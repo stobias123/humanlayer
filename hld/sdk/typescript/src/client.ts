@@ -6,6 +6,8 @@ import {
     SettingsApi,
     FilesApi,
     AgentsApi,
+    FoldersApi,
+    ThoughtsApi,
     CreateSessionRequest,
     Session,
     SessionsResponse,
@@ -21,7 +23,15 @@ import {
     UpdateConfigRequest,
     FuzzySearchFilesRequest,
     FuzzySearchFilesResponse,
-    DiscoverAgents200Response
+    DiscoverAgents200Response,
+    Folder,
+    FolderResponse,
+    FoldersResponse,
+    CreateFolderRequest,
+    UpdateFolderRequest,
+    BulkMoveSessionsResponse,
+    Thought,
+    ListThoughtsTypeEnum
 } from './generated';
 import { createErrorInterceptor } from './middleware';
 
@@ -52,6 +62,8 @@ export class HLDClient {
     private settingsApi: SettingsApi;
     private filesApi: FilesApi;
     private agentsApi: AgentsApi;
+    private foldersApi: FoldersApi;
+    private thoughtsApi: ThoughtsApi;
     private baseUrl: string;
     private headers?: Record<string, string>;
     private sseConnections: Map<string, EventSourceLike> = new Map();
@@ -85,6 +97,8 @@ export class HLDClient {
         this.settingsApi = new SettingsApi(config);
         this.filesApi = new FilesApi(config);
         this.agentsApi = new AgentsApi(config);
+        this.foldersApi = new FoldersApi(config);
+        this.thoughtsApi = new ThoughtsApi(config);
     }
 
     // Session Management
@@ -340,6 +354,64 @@ export class HLDClient {
     }): Promise<DiscoverAgents200Response> {
         const response = await this.agentsApi.discoverAgents(params);
         return response;
+    }
+
+    // Folders
+    async listFolders(includeArchived: boolean = false): Promise<Folder[]> {
+        const response = await this.foldersApi.listFolders({ includeArchived });
+        return response.data;
+    }
+
+    async createFolder(name: string, parentId?: string): Promise<Folder> {
+        const response = await this.foldersApi.createFolder({
+            createFolderRequest: { name, parentId }
+        });
+        return response.data;
+    }
+
+    async getFolder(id: string): Promise<Folder> {
+        const response = await this.foldersApi.getFolder({ id });
+        return response.data;
+    }
+
+    async updateFolder(id: string, updates: {
+        name?: string;
+        parentId?: string;
+        position?: number;
+        archived?: boolean;
+    }): Promise<Folder> {
+        const response = await this.foldersApi.updateFolder({
+            id,
+            updateFolderRequest: updates
+        });
+        return response.data;
+    }
+
+    async bulkMoveSessions(sessionIds: string[], folderId: string | null): Promise<BulkMoveSessionsResponse> {
+        const response = await this.sessionsApi.bulkMoveSessions({
+            bulkMoveSessionsRequest: {
+                sessionIds,
+                folderId: folderId ?? undefined
+            }
+        });
+        return response;
+    }
+
+    // Thoughts
+    async listThoughts(workingDir: string, type?: 'research' | 'plans' | 'all'): Promise<Thought[]> {
+        const response = await this.thoughtsApi.listThoughts({
+            workingDir,
+            type: type as ListThoughtsTypeEnum | undefined
+        });
+        return response.data;
+    }
+
+    async getThought(path: string, workingDir: string): Promise<Thought> {
+        const response = await this.thoughtsApi.getThought({
+            path,
+            workingDir
+        });
+        return response.data;
     }
 
     // Server-Sent Events using eventsource polyfill

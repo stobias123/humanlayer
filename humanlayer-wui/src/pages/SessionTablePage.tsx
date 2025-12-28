@@ -334,27 +334,32 @@ export function SessionTablePage() {
   return (
     <div className="flex flex-col gap-4">
       <nav className="sticky top-0 z-10 flex items-center justify-between gap-4">
-        <Tabs
-          className="w-[400px]"
-          value={viewMode}
-          onValueChange={value => setViewMode(value as ViewMode)}
-        >
-          <TabsList>
-            <TabsTrigger value={ViewMode.Normal}>
-              Sessions
-              {sessionCounts?.normal !== undefined && sessionCounts.normal > 0
-                ? ` (${sessionCounts.normal})`
-                : ''}
-            </TabsTrigger>
-            <TabsTrigger value={ViewMode.Drafts}>
-              Drafts
-              {sessionCounts?.draft !== undefined && sessionCounts.draft > 0
-                ? ` (${sessionCounts.draft})`
-                : ''}
-            </TabsTrigger>
-            <TabsTrigger value={ViewMode.Archived}>Archived</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-4">
+          <Tabs
+            className="w-[400px]"
+            value={viewMode}
+            onValueChange={value => setViewMode(value as ViewMode)}
+          >
+            <TabsList>
+              <TabsTrigger value={ViewMode.Normal}>
+                Sessions
+                {sessionCounts?.normal !== undefined && sessionCounts.normal > 0
+                  ? ` (${sessionCounts.normal})`
+                  : ''}
+              </TabsTrigger>
+              <TabsTrigger value={ViewMode.Drafts}>
+                Drafts
+                {sessionCounts?.draft !== undefined && sessionCounts.draft > 0
+                  ? ` (${sessionCounts.draft})`
+                  : ''}
+              </TabsTrigger>
+              <TabsTrigger value={ViewMode.Archived}>Archived</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/thoughts')}>
+            Thoughts <kbd className="ml-1 px-1 py-0.5 text-xs bg-muted/50 rounded">g t</kbd>
+          </Button>
+        </div>
 
         {/* Only show Create button when not in empty state for normal/drafts view */}
         {(viewMode === ViewMode.Archived || sessions.length > 0) && (

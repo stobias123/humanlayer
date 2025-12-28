@@ -107,6 +107,11 @@ func (m *Mapper) SessionToAPI(s store.Session) api.Session {
 		session.EditorState = s.EditorState
 	}
 
+	// Folder assignment
+	if s.FolderID != nil {
+		session.FolderId = s.FolderID
+	}
+
 	return session
 }
 

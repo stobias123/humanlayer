@@ -1,4 +1,4 @@
-import type { Session, SessionStatus } from '@/lib/daemon/types'
+import type { Session, SessionStatus, Folder } from '@/lib/daemon/types'
 import { ViewMode } from '@/lib/daemon/types'
 import { create } from 'zustand'
 import { daemonClient } from '@/lib/daemon'
@@ -76,6 +76,26 @@ interface StoreState {
   clearActiveSessionDetail: () => void
   fetchActiveSessionDetail: (sessionId: string) => Promise<void>
 
+  /* Folders */
+  folders: Folder[]
+  expandedFolders: Set<string>
+  focusedFolderId: string | null
+  currentFolderId: string | null // Filter sessions by this folder
+  activePane: 'main' | 'sidebar'
+  initFolders: (folders: Folder[]) => void
+  refreshFolders: () => Promise<void>
+  createFolder: (name: string, parentId?: string) => Promise<Folder>
+  updateFolder: (
+    id: string,
+    updates: { name?: string; parentId?: string; position?: number; archived?: boolean },
+  ) => Promise<Folder>
+  deleteFolder: (id: string) => Promise<void>
+  toggleFolderExpanded: (id: string) => void
+  moveSessionsToFolder: (sessionIds: string[], folderId: string | null) => Promise<void>
+  setFocusedFolderId: (id: string | null) => void
+  setCurrentFolderId: (id: string | null) => Promise<void>
+  setActivePane: (pane: 'main' | 'sidebar') => void
+
   /* Notifications */
   notifiedItems: Set<string> // Set of unique notification IDs
   addNotifiedItem: (notificationId: string) => void
@@ -99,6 +119,9 @@ interface StoreState {
   setSettingsDialogOpen: (open: boolean) => void
   isEditingSessionTitle: boolean
   setIsEditingSessionTitle: (editing: boolean) => void
+  sidebarCollapsed: boolean
+  toggleSidebar: () => void
+  setSidebarCollapsed: (collapsed: boolean) => void
 
   /* Auto-scroll State */
   autoScrollEnabled: boolean
@@ -180,6 +203,14 @@ export const useStore = create<StoreState>((set, get) => {
     claudeConfig: null,
     responseEditor: null,
     isResponseEditorEmpty: true,
+
+    // Folder state
+    folders: [],
+    expandedFolders: new Set<string>(),
+    focusedFolderId: null,
+    currentFolderId: null,
+    activePane: 'main' as const,
+
     initSessions: (sessions: Session[]) => set({ sessions }),
     updateSession: (sessionId: string, updates: Partial<Session>) =>
       set(state => ({
@@ -327,7 +358,7 @@ export const useStore = create<StoreState>((set, get) => {
       set({ isRefreshing: true })
 
       try {
-        const { pendingUpdates, getViewMode } = get()
+        const { pendingUpdates, getViewMode, currentFolderId } = get()
         const viewMode = getViewMode()
 
         let filter: 'normal' | 'archived' | 'draft' | undefined
@@ -345,6 +376,9 @@ export const useStore = create<StoreState>((set, get) => {
 
         const response = await daemonClient.getSessionLeaves({
           filter: filter,
+          // Only pass folder_id when filtering by a specific folder
+          // null = All Sessions (no filter), string = specific folder
+          folder_id: currentFolderId ?? undefined,
         })
 
         // Server is source of truth, but preserve unresolved pending updates
@@ -1039,6 +1073,96 @@ export const useStore = create<StoreState>((set, get) => {
       }
     },
 
+    // Folder Actions
+    initFolders: (folders: Folder[]) => set({ folders }),
+
+    refreshFolders: async () => {
+      try {
+        const folders = await daemonClient.listFolders()
+        set({ folders })
+      } catch (error) {
+        logger.error('Failed to refresh folders:', error)
+      }
+    },
+
+    createFolder: async (name: string, parentId?: string) => {
+      try {
+        const folder = await daemonClient.createFolder(name, parentId)
+        set(state => ({ folders: [...state.folders, folder] }))
+        return folder
+      } catch (error) {
+        logger.error('Failed to create folder:', error)
+        throw error
+      }
+    },
+
+    updateFolder: async (
+      id: string,
+      updates: { name?: string; parentId?: string; position?: number; archived?: boolean },
+    ) => {
+      try {
+        const folder = await daemonClient.updateFolder(id, updates)
+        set(state => ({
+          folders: state.folders.map(f => (f.id === id ? folder : f)),
+        }))
+        return folder
+      } catch (error) {
+        logger.error('Failed to update folder:', error)
+        throw error
+      }
+    },
+
+    deleteFolder: async (id: string) => {
+      try {
+        // Archive the folder (soft delete)
+        await daemonClient.updateFolder(id, { archived: true })
+        set(state => ({
+          folders: state.folders.filter(f => f.id !== id),
+        }))
+      } catch (error) {
+        logger.error('Failed to delete folder:', error)
+        throw error
+      }
+    },
+
+    toggleFolderExpanded: (id: string) =>
+      set(state => {
+        const newExpanded = new Set(state.expandedFolders)
+        if (newExpanded.has(id)) {
+          newExpanded.delete(id)
+        } else {
+          newExpanded.add(id)
+        }
+        return { expandedFolders: newExpanded }
+      }),
+
+    moveSessionsToFolder: async (sessionIds: string[], folderId: string | null) => {
+      try {
+        const response = await daemonClient.bulkMoveSessions(sessionIds, folderId)
+        if (!response.success) {
+          const failedCount = response.failedSessions?.length || 0
+          toast.error(`Failed to move ${failedCount} session(s)`)
+        }
+        // Refresh sessions to update their folder_id
+        await get().refreshSessions()
+        // Refresh folders to update session counts
+        await get().refreshFolders()
+      } catch (error) {
+        logger.error('Failed to move sessions to folder:', error)
+        throw error
+      }
+    },
+
+    setFocusedFolderId: (id: string | null) => set({ focusedFolderId: id }),
+
+    setCurrentFolderId: async (id: string | null) => {
+      set({ currentFolderId: id })
+      // Refresh sessions when folder changes to filter by new folder
+      await get().refreshSessions()
+    },
+
+    setActivePane: (pane: 'main' | 'sidebar') => set({ activePane: pane }),
+
     // UI State
     isHotkeyPanelOpen: false,
     setHotkeyPanelOpen: (open: boolean) => set({ isHotkeyPanelOpen: open }),
@@ -1046,6 +1170,29 @@ export const useStore = create<StoreState>((set, get) => {
     setSettingsDialogOpen: (open: boolean) => set({ isSettingsDialogOpen: open }),
     isEditingSessionTitle: false,
     setIsEditingSessionTitle: (editing: boolean) => set({ isEditingSessionTitle: editing }),
+
+    // Sidebar collapse state (persisted to localStorage)
+    sidebarCollapsed: localStorage.getItem('sidebar-collapsed') === 'true',
+
+    toggleSidebar: () => {
+      const newState = !get().sidebarCollapsed
+      localStorage.setItem('sidebar-collapsed', String(newState))
+      // If sidebar is collapsing and it was the active pane, switch to main
+      if (newState && get().activePane === 'sidebar') {
+        set({ sidebarCollapsed: newState, activePane: 'main' })
+      } else {
+        set({ sidebarCollapsed: newState })
+      }
+    },
+
+    setSidebarCollapsed: (collapsed: boolean) => {
+      localStorage.setItem('sidebar-collapsed', String(collapsed))
+      if (collapsed && get().activePane === 'sidebar') {
+        set({ sidebarCollapsed: collapsed, activePane: 'main' })
+      } else {
+        set({ sidebarCollapsed: collapsed })
+      }
+    },
 
     // Auto-scroll state
     autoScrollEnabled: true, // Default to enabled

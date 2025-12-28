@@ -157,7 +157,8 @@ func (h *SessionHandlers) HandleListSessions(ctx context.Context, params json.Ra
 // GetSessionLeavesRequest is the request for getting session leaves
 // TODO(3): This is gross, we should lean an alternate approach to handling filters.
 type GetSessionLeavesRequest struct {
-	Filter string `json:"filter,omitempty"` // "normal", "archived", or "draft"
+	Filter   string  `json:"filter,omitempty"`    // "normal", "archived", or "draft"
+	FolderID *string `json:"folder_id,omitempty"` // Filter sessions by folder ID
 }
 
 // GetSessionLeavesResponse is the response for getting session leaves
@@ -206,6 +207,26 @@ func (h *SessionHandlers) HandleGetSessionLeaves(ctx context.Context, params jso
 
 		// Already have session.Info, just append
 		leaves = append(leaves, s)
+	}
+
+	// Apply folder filter if specified
+	if req.FolderID != nil {
+		var folderFiltered []session.Info
+		for _, s := range leaves {
+			// Match exact folder or include all if filtering for "no folder"
+			if *req.FolderID == "" {
+				// Filter for sessions without a folder
+				if s.FolderID == nil || *s.FolderID == "" {
+					folderFiltered = append(folderFiltered, s)
+				}
+			} else {
+				// Filter for specific folder
+				if s.FolderID != nil && *s.FolderID == *req.FolderID {
+					folderFiltered = append(folderFiltered, s)
+				}
+			}
+		}
+		leaves = folderFiltered
 	}
 
 	// Sort by last activity (newest first)

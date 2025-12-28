@@ -168,6 +168,14 @@ humanlayer-binary-darwin-arm64: humanlayer-build
 	chmod +x hlyr/humanlayer-darwin-arm64
 	@echo "Standalone binary created at hlyr/humanlayer-darwin-arm64"
 
+# Build humanlayer standalone binary for Linux x64
+.PHONY: humanlayer-binary-linux-x64
+humanlayer-binary-linux-x64: humanlayer-build
+	@echo "Creating standalone humanlayer binary for Linux x64..."
+	cd hlyr && bun build ./dist/index.js --compile --target=bun-linux-x64 --outfile=humanlayer-linux-x64
+	chmod +x hlyr/humanlayer-linux-x64
+	@echo "Standalone binary created at hlyr/humanlayer-linux-x64"
+
 # Build CodeLayer with bundled daemon and humanlayer
 .PHONY: codelayer-bundle
 codelayer-bundle:
@@ -176,6 +184,29 @@ codelayer-bundle:
 	@echo "Building humanlayer for bundling..."
 	cd hlyr && bun install && bun run build
 	cd hlyr && bun build ./dist/index.js --compile --target=bun-darwin-arm64 --outfile=humanlayer-darwin-arm64
+
+# Build CodeLayer for Linux x64
+.PHONY: codelayer-bundle-linux
+codelayer-bundle-linux:
+	@echo "Building daemon for Linux x64..."
+	cd hld && GOOS=linux GOARCH=amd64 go build -o hld-linux-x64 ./cmd/hld
+	@echo "Building humanlayer CLI for Linux x64..."
+	cd hlyr && bun install && bun run build
+	cd hlyr && bun build ./dist/index.js --compile --target=bun-linux-x64 --outfile=humanlayer-linux-x64
+	chmod +x hlyr/humanlayer-linux-x64
+	@echo "Copying binaries to Tauri resources..."
+	mkdir -p humanlayer-wui/src-tauri/bin
+	cp hld/hld-linux-x64 humanlayer-wui/src-tauri/bin/hld
+	cp hlyr/humanlayer-linux-x64 humanlayer-wui/src-tauri/bin/humanlayer
+	chmod +x humanlayer-wui/src-tauri/bin/hld
+	chmod +x humanlayer-wui/src-tauri/bin/humanlayer
+	@echo "Installing WUI dependencies..."
+	cd humanlayer-wui && bun install
+	@echo "Building Tauri app for Linux..."
+	cd humanlayer-wui && bun run tauri build
+	@echo "Linux build complete! Packages available at:"
+	@ls -la humanlayer-wui/src-tauri/target/release/bundle/deb/*.deb 2>/dev/null || true
+	@ls -la humanlayer-wui/src-tauri/target/release/bundle/appimage/*.AppImage 2>/dev/null || true
 
 codelayer-nightly-bundle:
 	@echo "Setting build version..."
@@ -356,6 +387,34 @@ ifdef POSTHOG
 else
 	cd humanlayer-wui && HUMANLAYER_DAEMON_SOCKET=~/.humanlayer/daemon-dev.sock bun run tauri dev
 endif
+
+# Run dev WUI as web-only (no Tauri) with managed daemon lifecycle
+.PHONY: wui-web-dev
+wui-web-dev: ## Run WUI web-only (no Tauri). Starts/stops daemon automatically. Use PORT=XXXX for vite port.
+	@echo "==========================================="
+	@echo "Starting web-only dev environment"
+	@echo "Daemon: http://localhost:7777"
+	@echo "WUI: http://localhost:$(or $(PORT),5173)"
+	@echo "==========================================="
+	@mkdir -p ~/.humanlayer/logs
+	$(eval TIMESTAMP := $(shell date +%Y-%m-%d-%H-%M-%S))
+	@HUMANLAYER_DATABASE_PATH=~/.humanlayer/daemon-web-dev.db \
+		HUMANLAYER_DAEMON_SOCKET=~/.humanlayer/daemon-web-dev.sock \
+		HUMANLAYER_DAEMON_HTTP_PORT=7777 \
+		HUMANLAYER_DAEMON_VERSION_OVERRIDE=web-dev-$$(git branch --show-current) \
+		./hld/hld-dev > ~/.humanlayer/logs/daemon-web-dev-$(TIMESTAMP).log 2>&1 & \
+		daemon_pid=$$!; \
+		echo "Started daemon (PID: $$daemon_pid)"; \
+		trap "echo 'Stopping daemon...'; kill $$daemon_pid 2>/dev/null; exit" INT TERM EXIT; \
+		sleep 1; \
+		cd humanlayer-wui && \
+		VITE_HUMANLAYER_DAEMON_URL=http://localhost:7777 \
+		bun run dev $(if $(PORT),-- --port $(PORT),)
+
+# Web-only dev with daemon build (ensures daemon binary is built first)
+.PHONY: codelayer-web-dev
+codelayer-web-dev: daemon-dev-build ## Run CodeLayer web-only (no Tauri). Use PORT=XXXX for custom vite port.
+	$(MAKE) wui-web-dev PORT=$(PORT)
 
 # Run Storybook for WUI component development
 .PHONY: storybook

@@ -10,6 +10,8 @@ import {
   UpdateConfigRequest,
   FuzzySearchFilesResponse,
   Agent,
+  Folder,
+  Thought,
 } from '@humanlayer/hld-sdk'
 import { getDaemonUrl, getDefaultHeaders } from './http-config'
 import { logger } from '@/lib/logging'
@@ -256,7 +258,10 @@ export class HTTPDaemonClient implements IDaemonClient {
     return sessions.map(transformSDKSession)
   }
 
-  async getSessionLeaves(request?: { filter?: 'normal' | 'archived' | 'draft' }): Promise<{
+  async getSessionLeaves(request?: {
+    filter?: 'normal' | 'archived' | 'draft'
+    folder_id?: string
+  }): Promise<{
     sessions: Session[]
     counts?: {
       normal?: number
@@ -269,6 +274,7 @@ export class HTTPDaemonClient implements IDaemonClient {
     const response = await this.client!.listSessionsWithCounts({
       leavesOnly: true,
       filter: request?.filter,
+      folderId: request?.folder_id,
     })
     logger.debug(
       'getSessionLeaves raw response sample:',
@@ -759,6 +765,66 @@ export class HTTPDaemonClient implements IDaemonClient {
 
     const response = await this.client.updateConfig(settings)
     return response
+  }
+
+  // Folder Methods
+
+  async listFolders(includeArchived: boolean = false): Promise<Folder[]> {
+    await this.ensureConnected()
+    if (!this.client) throw new Error('SDK client not initialized')
+    return this.client.listFolders(includeArchived)
+  }
+
+  async createFolder(name: string, parentId?: string): Promise<Folder> {
+    await this.ensureConnected()
+    if (!this.client) throw new Error('SDK client not initialized')
+    return this.client.createFolder(name, parentId)
+  }
+
+  async getFolder(id: string): Promise<Folder> {
+    await this.ensureConnected()
+    if (!this.client) throw new Error('SDK client not initialized')
+    return this.client.getFolder(id)
+  }
+
+  async updateFolder(
+    id: string,
+    updates: {
+      name?: string
+      parentId?: string
+      position?: number
+      archived?: boolean
+    },
+  ): Promise<Folder> {
+    await this.ensureConnected()
+    if (!this.client) throw new Error('SDK client not initialized')
+    return this.client.updateFolder(id, updates)
+  }
+
+  async bulkMoveSessions(
+    sessionIds: string[],
+    folderId: string | null,
+  ): Promise<{ success: boolean; failedSessions?: string[] }> {
+    await this.ensureConnected()
+    if (!this.client) throw new Error('SDK client not initialized')
+    const response = await this.client.bulkMoveSessions(sessionIds, folderId)
+    return {
+      success: response.data.success,
+      failedSessions: response.data.failedSessions,
+    }
+  }
+
+  // Thoughts
+  async listThoughts(workingDir: string, type?: 'research' | 'plans' | 'all'): Promise<Thought[]> {
+    await this.ensureConnected()
+    if (!this.client) throw new Error('SDK client not initialized')
+    return this.client.listThoughts(workingDir, type)
+  }
+
+  async getThought(path: string, workingDir: string): Promise<Thought> {
+    await this.ensureConnected()
+    if (!this.client) throw new Error('SDK client not initialized')
+    return this.client.getThought(path, workingDir)
   }
 
   private async ensureConnected(): Promise<void> {

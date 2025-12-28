@@ -950,3 +950,223 @@ func TestResumedSessionTokenCounting(t *testing.T) {
 		t.Errorf("Effective context should include cache tokens for resumed sessions, expected 150800, got %v", retrieved.EffectiveContextTokens)
 	}
 }
+
+// TestSessionFolderAssignment tests that sessions can be assigned to folders
+func TestSessionFolderAssignment(t *testing.T) {
+	// Create temporary database
+	dbPath := testutil.DatabasePath(t, "session-folder-assignment")
+
+	// Create store
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+
+	// Create a folder
+	folder := &Folder{
+		ID:        "folder-test-1",
+		Name:      "Test Folder",
+		Position:  0,
+		Archived:  false,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	err = store.CreateFolder(ctx, folder)
+	if err != nil {
+		t.Fatalf("failed to create folder: %v", err)
+	}
+
+	// Create a session without folder
+	session := &Session{
+		ID:             "sess-folder-1",
+		RunID:          "run-folder-1",
+		Query:          "Test folder assignment",
+		Model:          "claude-3.5-sonnet-20241022",
+		Status:         SessionStatusRunning,
+		CreatedAt:      time.Now(),
+		LastActivityAt: time.Now(),
+	}
+	err = store.CreateSession(ctx, session)
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	// Verify session has no folder initially
+	retrieved, err := store.GetSession(ctx, session.ID)
+	if err != nil {
+		t.Fatalf("failed to get session: %v", err)
+	}
+	if retrieved.FolderID != nil {
+		t.Errorf("expected session to have no folder initially, got %v", *retrieved.FolderID)
+	}
+
+	// Move session to folder using double-pointer pattern
+	folderID := "folder-test-1"
+	folderIDPtr := &folderID
+	err = store.UpdateSession(ctx, session.ID, SessionUpdate{
+		FolderID: &folderIDPtr,
+	})
+	if err != nil {
+		t.Fatalf("failed to move session to folder: %v", err)
+	}
+
+	// Verify session now has folder_id
+	retrieved, err = store.GetSession(ctx, session.ID)
+	if err != nil {
+		t.Fatalf("failed to get session after move: %v", err)
+	}
+	if retrieved.FolderID == nil {
+		t.Fatalf("expected session to have folder_id after move, got nil")
+	}
+	if *retrieved.FolderID != folderID {
+		t.Errorf("expected folder_id %s, got %s", folderID, *retrieved.FolderID)
+	}
+
+	// Verify folder shows session count
+	folderRetrieved, err := store.GetFolder(ctx, folder.ID)
+	if err != nil {
+		t.Fatalf("failed to get folder: %v", err)
+	}
+	if folderRetrieved.SessionCount != 1 {
+		t.Errorf("expected folder session count 1, got %d", folderRetrieved.SessionCount)
+	}
+
+	// Test removing from folder (set to null)
+	var nilFolderID *string = nil
+	err = store.UpdateSession(ctx, session.ID, SessionUpdate{
+		FolderID: &nilFolderID,
+	})
+	if err != nil {
+		t.Fatalf("failed to remove session from folder: %v", err)
+	}
+
+	// Verify session has no folder again
+	retrieved, err = store.GetSession(ctx, session.ID)
+	if err != nil {
+		t.Fatalf("failed to get session after removal: %v", err)
+	}
+	if retrieved.FolderID != nil {
+		t.Errorf("expected session to have no folder after removal, got %v", *retrieved.FolderID)
+	}
+
+	// Verify folder shows zero session count
+	folderRetrieved, err = store.GetFolder(ctx, folder.ID)
+	if err != nil {
+		t.Fatalf("failed to get folder after removal: %v", err)
+	}
+	if folderRetrieved.SessionCount != 0 {
+		t.Errorf("expected folder session count 0 after removal, got %d", folderRetrieved.SessionCount)
+	}
+}
+
+func TestFolderIsDescendant(t *testing.T) {
+	dbPath := testutil.DatabasePath(t, "folder-is-descendant")
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+
+	// Create folder hierarchy: A -> B -> C
+	folderA := &Folder{ID: "folder-a", Name: "A", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	folderB := &Folder{ID: "folder-b", Name: "B", ParentID: ptr("folder-a"), CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	folderC := &Folder{ID: "folder-c", Name: "C", ParentID: ptr("folder-b"), CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	folderD := &Folder{ID: "folder-d", Name: "D", CreatedAt: time.Now(), UpdatedAt: time.Now()} // Unrelated
+
+	for _, f := range []*Folder{folderA, folderB, folderC, folderD} {
+		if err := store.CreateFolder(ctx, f); err != nil {
+			t.Fatalf("failed to create folder %s: %v", f.ID, err)
+		}
+	}
+
+	tests := []struct {
+		name       string
+		ancestorID string
+		descendant string
+		expected   bool
+	}{
+		{"self is descendant", "folder-a", "folder-a", true},
+		{"direct child", "folder-a", "folder-b", true},
+		{"grandchild", "folder-a", "folder-c", true},
+		{"not descendant - sibling", "folder-b", "folder-d", false},
+		{"not descendant - parent", "folder-b", "folder-a", false},
+		{"not descendant - unrelated", "folder-d", "folder-c", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := store.IsDescendant(ctx, tt.ancestorID, tt.descendant)
+			if err != nil {
+				t.Fatalf("IsDescendant failed: %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("IsDescendant(%s, %s) = %v, want %v", tt.ancestorID, tt.descendant, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFolderGetSubtreeMaxDepth(t *testing.T) {
+	dbPath := testutil.DatabasePath(t, "folder-subtree-depth")
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+
+	// Create hierarchy:
+	// root1 (depth 0 below)
+	//   child1 (depth 1)
+	//     grandchild1 (depth 2)
+	//   child2 (depth 1)
+	// root2 (depth 0 below - no children)
+	folders := []*Folder{
+		{ID: "root1", Name: "Root1", CreatedAt: time.Now(), UpdatedAt: time.Now()},
+		{ID: "child1", Name: "Child1", ParentID: ptr("root1"), CreatedAt: time.Now(), UpdatedAt: time.Now()},
+		{ID: "child2", Name: "Child2", ParentID: ptr("root1"), CreatedAt: time.Now(), UpdatedAt: time.Now()},
+		{ID: "grandchild1", Name: "Grandchild1", ParentID: ptr("child1"), CreatedAt: time.Now(), UpdatedAt: time.Now()},
+		{ID: "root2", Name: "Root2", CreatedAt: time.Now(), UpdatedAt: time.Now()},
+	}
+
+	for _, f := range folders {
+		if err := store.CreateFolder(ctx, f); err != nil {
+			t.Fatalf("failed to create folder %s: %v", f.ID, err)
+		}
+	}
+
+	tests := []struct {
+		name     string
+		folderID string
+		expected int
+	}{
+		{"root with grandchildren", "root1", 2},
+		{"child with one level below", "child1", 1},
+		{"child with no children", "child2", 0},
+		{"grandchild (leaf)", "grandchild1", 0},
+		{"root with no children", "root2", 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := store.GetSubtreeMaxDepth(ctx, tt.folderID)
+			if err != nil {
+				t.Fatalf("GetSubtreeMaxDepth failed: %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("GetSubtreeMaxDepth(%s) = %d, want %d", tt.folderID, result, tt.expected)
+			}
+		})
+	}
+}
+
+// Helper function for tests
+func ptr(s string) *string {
+	return &s
+}

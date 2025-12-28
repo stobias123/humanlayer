@@ -49,6 +49,8 @@ type HTTPServer struct {
 	configHandler    *handlers.ConfigHandler
 	settingsHandlers *handlers.SettingsHandlers
 	agentHandlers    *handlers.AgentHandlers
+	folderHandlers   *handlers.FolderHandlers
+	thoughtHandlers  *handlers.ThoughtHandlers
 	approvalManager  approval.Manager
 	eventBus         bus.EventBus
 
@@ -96,6 +98,8 @@ func NewHTTPServer(
 	configHandler := handlers.NewConfigHandler()
 	settingsHandlers := handlers.NewSettingsHandlers(conversationStore)
 	agentHandlers := handlers.NewAgentHandlers()
+	folderHandlers := handlers.NewFolderHandlers(conversationStore)
+	thoughtHandlers := handlers.NewThoughtHandlers()
 
 	return &HTTPServer{
 		config:           cfg,
@@ -109,6 +113,8 @@ func NewHTTPServer(
 		configHandler:    configHandler,
 		settingsHandlers: settingsHandlers,
 		agentHandlers:    agentHandlers,
+		folderHandlers:   folderHandlers,
+		thoughtHandlers:  thoughtHandlers,
 		approvalManager:  approvalManager,
 		eventBus:         eventBus,
 	}
@@ -117,7 +123,7 @@ func NewHTTPServer(
 // Start starts the HTTP server
 func (s *HTTPServer) Start(ctx context.Context) error {
 	// Create server implementation combining all handlers
-	serverImpl := handlers.NewServerImpl(s.sessionHandlers, s.approvalHandlers, s.fileHandlers, s.sseHandler, s.settingsHandlers, s.agentHandlers)
+	serverImpl := handlers.NewServerImpl(s.sessionHandlers, s.approvalHandlers, s.fileHandlers, s.sseHandler, s.settingsHandlers, s.agentHandlers, s.folderHandlers, s.thoughtHandlers)
 
 	// Create strict handler with middleware
 	strictHandler := api.NewStrictHandler(serverImpl, nil)

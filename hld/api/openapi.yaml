@@ -189,6 +189,12 @@ paths:
               - archived: archived sessions only
               - draft: draft sessions only
               When omitted, returns ALL sessions (no filtering)
+        - name: folder_id
+          in: query
+          description: Filter sessions by folder ID. Empty string for sessions without folder.
+          required: false
+          schema:
+            type: string
       responses:
         '200':
           description: List of sessions
@@ -555,6 +561,217 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "500":
           $ref: "#/components/responses/InternalError"
+
+  /sessions/move:
+    post:
+      operationId: bulkMoveSessions
+      summary: Move sessions to a folder
+      description: Move multiple sessions to a specified folder
+      tags:
+        - Sessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkMoveSessionsRequest'
+      responses:
+        '200':
+          description: Sessions moved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkMoveSessionsResponse'
+        '207':
+          description: Partial success - some sessions failed to move
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkMoveSessionsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /folders:
+    get:
+      operationId: listFolders
+      summary: List all folders
+      description: Returns folder tree with session counts
+      tags:
+        - Folders
+      parameters:
+        - name: includeArchived
+          in: query
+          description: Include archived folders in response
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: List of folders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoldersResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: createFolder
+      summary: Create a new folder
+      description: Create a new folder for organizing sessions (max 3 levels nesting)
+      tags:
+        - Folders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFolderRequest'
+      responses:
+        '201':
+          description: Folder created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderResponse'
+        '400':
+          description: Validation error (e.g., max depth exceeded, invalid name)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /folders/{id}:
+    get:
+      operationId: getFolder
+      summary: Get folder details
+      description: Get detailed information about a specific folder
+      tags:
+        - Folders
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Folder ID
+          schema:
+            type: string
+          example: folder_abc123
+      responses:
+        '200':
+          description: Folder details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    patch:
+      operationId: updateFolder
+      summary: Update folder (rename, move, archive)
+      description: Update folder properties. Archiving a folder cascades to all sessions within it.
+      tags:
+        - Folders
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Folder ID
+          schema:
+            type: string
+          example: folder_abc123
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFolderRequest'
+      responses:
+        '200':
+          description: Folder updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderResponse'
+        '400':
+          description: Validation error (e.g., max depth exceeded)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /thoughts:
+    get:
+      operationId: listThoughts
+      summary: List thought files (research, plans, etc.)
+      tags:
+        - Thoughts
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [research, plans, all]
+            default: all
+          description: Filter by thought type
+        - name: workingDir
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Base directory containing thoughts/
+      responses:
+        '200':
+          description: List of thought files
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThoughtsResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /thoughts/detail:
+    get:
+      operationId: getThought
+      summary: Get thought file content
+      tags:
+        - Thoughts
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Relative path within thoughts directory (e.g., shared/research/file.md)
+        - name: workingDir
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Base directory containing thoughts/
+      responses:
+        '200':
+          description: Thought file content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThoughtResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /recent-paths:
     get:
@@ -1293,6 +1510,11 @@ components:
           nullable: true
           description: JSON blob of editor state for draft sessions
           example: '{"content":"console.log(\"hello\");","cursorPosition":24}'
+        folder_id:
+          type: string
+          nullable: true
+          description: Folder this session belongs to
+          example: folder_abc123
 
     SessionStatus:
       type: string
@@ -1307,6 +1529,48 @@ components:
         - waiting_input
         - discarded
       description: Current status of the session
+
+    Folder:
+      type: object
+      required:
+        - id
+        - name
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          description: Unique folder identifier
+          example: folder_abc123
+        name:
+          type: string
+          description: Folder display name
+          example: "Frontend Projects"
+          minLength: 1
+          maxLength: 100
+        parent_id:
+          type: string
+          nullable: true
+          description: Parent folder ID for nesting (max 3 levels)
+          example: folder_parent456
+        position:
+          type: integer
+          description: Sort order within parent (0-indexed)
+          default: 0
+        archived:
+          type: boolean
+          description: Whether folder is archived
+          default: false
+        session_count:
+          type: integer
+          description: Number of sessions in this folder
+          example: 5
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
     CreateSessionRequest:
       type: object
@@ -1592,6 +1856,11 @@ components:
         status:
           $ref: '#/components/schemas/SessionStatus'
           description: Update session status (only draft ↔ discarded transitions allowed)
+        folder_id:
+          type: string
+          nullable: true
+          description: Move session to a folder (null to remove from folder)
+          example: folder_abc123
 
     ContinueSessionRequest:
       type: object
@@ -1865,6 +2134,100 @@ components:
               description: Sessions that failed to restore
               example: ["sess_789"]
 
+    # Folder Types
+    CreateFolderRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Folder display name
+          example: "Frontend Projects"
+        parent_id:
+          type: string
+          nullable: true
+          description: Parent folder ID for nesting (max 3 levels)
+          example: folder_parent456
+
+    UpdateFolderRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: New folder name
+          example: "Updated Projects"
+        parent_id:
+          type: string
+          nullable: true
+          description: New parent folder ID (or null for root)
+        position:
+          type: integer
+          description: New sort position within parent
+        archived:
+          type: boolean
+          description: Archive/unarchive the folder (cascades to sessions)
+
+    FolderResponse:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          $ref: '#/components/schemas/Folder'
+
+    FoldersResponse:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Folder'
+
+    BulkMoveSessionsRequest:
+      type: object
+      required:
+        - session_ids
+      properties:
+        session_ids:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          description: Session IDs to move
+          example: ["sess_123", "sess_456"]
+        folder_id:
+          type: string
+          nullable: true
+          description: Target folder ID (null to move to root/unfiled)
+          example: folder_abc123
+
+    BulkMoveSessionsResponse:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: object
+          required:
+            - success
+          properties:
+            success:
+              type: boolean
+              example: true
+            failed_sessions:
+              type: array
+              items:
+                type: string
+              description: Sessions that failed to move
+              example: ["sess_789"]
+
     # Path Types
     RecentPath:
       type: object
@@ -1922,6 +2285,75 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SlashCommand'
+
+    # Thought Types
+    Thought:
+      type: object
+      required:
+        - path
+        - filename
+        - type
+      properties:
+        path:
+          type: string
+          description: Relative path within thoughts/
+          example: shared/research/2025-12-24-example.md
+        filename:
+          type: string
+          example: 2025-12-24-example.md
+        type:
+          $ref: '#/components/schemas/ThoughtType'
+        frontmatter:
+          $ref: '#/components/schemas/ThoughtFrontmatter'
+        content:
+          type: string
+          description: Full markdown content (only in getThought response)
+
+    ThoughtType:
+      type: string
+      enum: [research, plan, ticket, handoff, other]
+      description: Type of thought document
+
+    ThoughtFrontmatter:
+      type: object
+      properties:
+        date:
+          type: string
+        topic:
+          type: string
+        status:
+          $ref: '#/components/schemas/ThoughtFrontmatterStatus'
+        tags:
+          type: array
+          items:
+            type: string
+        researcher:
+          type: string
+        last_updated:
+          type: string
+
+    ThoughtFrontmatterStatus:
+      type: string
+      enum: [draft, in_progress, complete]
+      description: Status of the thought document
+
+    ThoughtsResponse:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Thought'
+
+    ThoughtResponse:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          $ref: '#/components/schemas/Thought'
 
     # Agent Types
     Agent:
@@ -2300,6 +2732,8 @@ tags:
     description: System health and status endpoints
   - name: Sessions
     description: Session lifecycle management
+  - name: Folders
+    description: Folder organization for sessions
   - name: Approvals
     description: Human-in-the-loop approval workflows
   - name: Events
@@ -2310,3 +2744,5 @@ tags:
     description: File system search and navigation
   - name: Agents
     description: Agent discovery and management
+  - name: Thoughts
+    description: Research documents and implementation plans

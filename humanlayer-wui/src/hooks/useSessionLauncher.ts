@@ -2,8 +2,7 @@ import { create } from 'zustand'
 import { daemonClient } from '@/lib/daemon'
 import type { LaunchSessionRequest } from '@/lib/daemon/types'
 import { useHotkeys } from 'react-hotkeys-hook'
-import { exists } from '@tauri-apps/plugin-fs'
-import { homeDir } from '@tauri-apps/api/path'
+import { validateDirectoryPath } from '@/lib/filesystem'
 import { logger } from '@/lib/logging'
 import { useStore } from '@/AppStore'
 import { HOTKEY_SCOPES } from '@/hooks/hotkeys/scopes'
@@ -253,22 +252,9 @@ export const useSessionLauncher = create<LauncherState>((set, get) => ({
 
     // Validate working directory if provided
     if (config.workingDir) {
-      try {
-        // Expand ~ to home directory
-        let pathToCheck = config.workingDir
-        if (pathToCheck.startsWith('~')) {
-          const home = await homeDir()
-          pathToCheck = pathToCheck.replace(/^~(?=$|\/|\\)/, home)
-        }
-
-        // Check if the path exists
-        const pathExists = await exists(pathToCheck)
-        if (!pathExists) {
-          set({ error: `Directory does not exist: ${config.workingDir}` })
-          return
-        }
-      } catch (err) {
-        set({ error: `Error checking directory: ${err}` })
+      const error = await validateDirectoryPath(config.workingDir)
+      if (error) {
+        set({ error })
         return
       }
     }
@@ -276,22 +262,9 @@ export const useSessionLauncher = create<LauncherState>((set, get) => ({
     // Validate additional directories if provided
     if (config.additionalDirectories && config.additionalDirectories.length > 0) {
       for (const dir of config.additionalDirectories) {
-        try {
-          // Expand ~ to home directory
-          let pathToCheck = dir
-          if (pathToCheck.startsWith('~')) {
-            const home = await homeDir()
-            pathToCheck = pathToCheck.replace(/^~(?=$|\/|\\)/, home)
-          }
-
-          // Check if the path exists
-          const pathExists = await exists(pathToCheck)
-          if (!pathExists) {
-            set({ error: `Additional directory does not exist: ${dir}` })
-            return
-          }
-        } catch (err) {
-          set({ error: `Error checking additional directory ${dir}: ${err}` })
+        const error = await validateDirectoryPath(dir)
+        if (error) {
+          set({ error: `Additional directory error: ${error}` })
           return
         }
       }

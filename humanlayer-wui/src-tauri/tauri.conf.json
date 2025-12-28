@@ -31,7 +31,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["deb", "rpm", "dmg", "app"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -39,7 +39,19 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["bin/hld", "bin/humanlayer"]
+    "resources": ["bin/hld", "bin/humanlayer"],
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"],
+        "section": "utils",
+        "priority": "optional"
+      },
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    },
+    "category": "Utility",
+    "shortDescription": "Desktop application for HumanLayer AI approvals"
   },
   "plugins": {
     "fs": {

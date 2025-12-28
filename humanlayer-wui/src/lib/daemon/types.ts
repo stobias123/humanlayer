@@ -10,6 +10,7 @@ import type {
   ConversationEvent,
   Agent,
   FuzzySearchFilesResponse,
+  Folder,
 } from '@humanlayer/hld-sdk'
 
 // Re-export SDK types and values
@@ -18,7 +19,14 @@ export type { Event, EventType }
 export type RecentPath = SDKRecentPath
 
 // Export SDK types directly
-export type { Approval, Agent } from '@humanlayer/hld-sdk'
+export type {
+  Approval,
+  Agent,
+  Folder,
+  Thought,
+  ThoughtFrontmatter,
+  ThoughtType,
+} from '@humanlayer/hld-sdk'
 
 // Extend SDK Session type with WUI-specific properties
 export interface Session extends SDKSession {
@@ -88,7 +96,10 @@ export interface DaemonClient {
   }): Promise<{ data: Array<{ name: string; source: 'local' | 'global' }> }>
   searchSessions(params: { query?: string; limit?: number }): Promise<{ data: Session[] }>
   listSessions(): Promise<Session[]>
-  getSessionLeaves(request?: { filter?: 'normal' | 'archived' | 'draft' }): Promise<{
+  getSessionLeaves(request?: {
+    filter?: 'normal' | 'archived' | 'draft'
+    folder_id?: string
+  }): Promise<{
     sessions: Session[]
     counts?: {
       normal?: number
@@ -172,6 +183,24 @@ export interface DaemonClient {
     respectGitignore?: boolean
   }): Promise<FuzzySearchFilesResponse>
   discoverAgents(workingDir: string): Promise<Agent[]>
+
+  // Folder methods
+  listFolders(includeArchived?: boolean): Promise<Folder[]>
+  createFolder(name: string, parentId?: string): Promise<Folder>
+  getFolder(id: string): Promise<Folder>
+  updateFolder(
+    id: string,
+    updates: {
+      name?: string
+      parentId?: string
+      position?: number
+      archived?: boolean
+    },
+  ): Promise<Folder>
+  bulkMoveSessions(
+    sessionIds: string[],
+    folderId: string | null,
+  ): Promise<{ success: boolean; failedSessions?: string[] }>
 }
 
 // Legacy enums and types for backward compatibility (to be gradually removed)

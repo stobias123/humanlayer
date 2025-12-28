@@ -2,6 +2,9 @@ docs/source
 **/.env
 humanlayer-tui/humanlayer-tui
 claude_output.jsonl
+hld/hld-linux-x64
+hlyr/humanlayer-linux-x64
+thoughts/
 
 # From https://raw.githubusercontent.com/github/gitignore/main/Python.gitignore
 
@@ -183,6 +186,9 @@ cython_debug/
 hlyr/blah.txt
 hld/hld-dev
 hld/hld-nightly
+
+# Kubernetes secrets (use hld-secret.yaml.example as template)
+k8s/hld-secret.yaml
 
 hlyr/*.bun-build
 

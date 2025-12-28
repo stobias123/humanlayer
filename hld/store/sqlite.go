@@ -1117,6 +1117,70 @@ func (s *SQLiteStore) applyMigrations() error {
 		slog.Info("Migration 22 applied successfully")
 	}
 
+	// Migration 23: Add folders table and folder_id to sessions
+	if currentVersion < 23 {
+		slog.Info("Applying migration 23: Add folders table and folder_id to sessions")
+
+		// Create folders table
+		_, err := s.db.Exec(`
+			CREATE TABLE IF NOT EXISTS folders (
+				id TEXT PRIMARY KEY,
+				name TEXT NOT NULL,
+				parent_id TEXT REFERENCES folders(id),
+				position INTEGER NOT NULL DEFAULT 0,
+				archived BOOLEAN NOT NULL DEFAULT FALSE,
+				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)
+		`)
+		if err != nil {
+			return fmt.Errorf("migration 23 failed to create folders table: %w", err)
+		}
+
+		// Add indexes for folders
+		_, err = s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id)`)
+		if err != nil {
+			return fmt.Errorf("migration 23 failed to create folders parent index: %w", err)
+		}
+
+		_, err = s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_folders_archived ON folders(archived)`)
+		if err != nil {
+			return fmt.Errorf("migration 23 failed to create folders archived index: %w", err)
+		}
+
+		// Check if folder_id column already exists on sessions
+		var colExists int
+		err = s.db.QueryRow(`
+			SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'folder_id'
+		`).Scan(&colExists)
+		if err != nil {
+			return fmt.Errorf("migration 23 failed to check folder_id column: %w", err)
+		}
+
+		if colExists == 0 {
+			_, err = s.db.Exec(`ALTER TABLE sessions ADD COLUMN folder_id TEXT REFERENCES folders(id)`)
+			if err != nil {
+				return fmt.Errorf("migration 23 failed to add folder_id column: %w", err)
+			}
+
+			_, err = s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_sessions_folder ON sessions(folder_id)`)
+			if err != nil {
+				return fmt.Errorf("migration 23 failed to create sessions folder index: %w", err)
+			}
+		}
+
+		// Record migration
+		_, err = s.db.Exec(`
+			INSERT INTO schema_version (version, description)
+			VALUES (23, 'Add folders table and folder_id to sessions')
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to record migration 23: %w", err)
+		}
+
+		slog.Info("Migration 23 applied successfully")
+	}
+
 	return nil
 }
 
@@ -1180,8 +1244,8 @@ func (s *SQLiteStore) CreateSession(ctx context.Context, session *Session) error
 			permission_prompt_tool, allowed_tools, disallowed_tools,
 			status, created_at, last_activity_at, auto_accept_edits, archived, dangerously_skip_permissions, dangerously_skip_permissions_expires_at,
 			dangerously_skip_permissions_timeout_ms,
-			proxy_enabled, proxy_base_url, proxy_model_override, proxy_api_key, additional_directories, editor_state
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			proxy_enabled, proxy_base_url, proxy_model_override, proxy_api_key, additional_directories, editor_state, folder_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := s.db.ExecContext(ctx, query,
@@ -1193,7 +1257,7 @@ func (s *SQLiteStore) CreateSession(ctx context.Context, session *Session) error
 		session.DangerouslySkipPermissions, session.DangerouslySkipPermissionsExpiresAt,
 		session.DangerouslySkipPermissionsTimeoutMs,
 		session.ProxyEnabled, session.ProxyBaseURL, session.ProxyModelOverride, session.ProxyAPIKey,
-		session.AdditionalDirectories, session.EditorState,
+		session.AdditionalDirectories, session.EditorState, session.FolderID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
@@ -1336,6 +1400,14 @@ func (s *SQLiteStore) UpdateSession(ctx context.Context, sessionID string, updat
 		setParts = append(setParts, "editor_state = ?")
 		args = append(args, *updates.EditorState)
 	}
+	if updates.FolderID != nil {
+		setParts = append(setParts, "folder_id = ?")
+		if *updates.FolderID != nil {
+			args = append(args, **updates.FolderID)
+		} else {
+			args = append(args, nil)
+		}
+	}
 
 	if len(setParts) == 0 {
 		// No fields to update is OK - this is a no-op
@@ -1394,7 +1466,7 @@ func (s *SQLiteStore) GetSession(ctx context.Context, sessionID string) (*Sessio
 			cost_usd, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, effective_context_tokens,
 			duration_ms, num_turns, result_content, error_message, auto_accept_edits, archived,
 			dangerously_skip_permissions, dangerously_skip_permissions_expires_at, dangerously_skip_permissions_timeout_ms,
-			proxy_enabled, proxy_base_url, proxy_model_override, proxy_api_key, additional_directories, editor_state
+			proxy_enabled, proxy_base_url, proxy_model_override, proxy_api_key, additional_directories, editor_state, folder_id
 		FROM sessions WHERE id = ?
 	`
 
@@ -1413,6 +1485,7 @@ func (s *SQLiteStore) GetSession(ctx context.Context, sessionID string) (*Sessio
 	var proxyBaseURL, proxyModelOverride, proxyAPIKey sql.NullString
 	var additionalDirectories sql.NullString
 	var editorState sql.NullString
+	var folderID sql.NullString
 
 	err := s.db.QueryRowContext(ctx, query, sessionID).Scan(
 		&session.ID, &session.RunID, &claudeSessionID, &parentSessionID,
@@ -1423,7 +1496,7 @@ func (s *SQLiteStore) GetSession(ctx context.Context, sessionID string) (*Sessio
 		&costUSD, &inputTokens, &outputTokens, &cacheCreationInputTokens, &cacheReadInputTokens, &effectiveContextTokens,
 		&durationMS, &numTurns, &resultContent, &errorMessage, &session.AutoAcceptEdits,
 		&archived, &session.DangerouslySkipPermissions, &dangerouslySkipPermissionsExpiresAt, &dangerouslySkipPermissionsTimeoutMs,
-		&proxyEnabled, &proxyBaseURL, &proxyModelOverride, &proxyAPIKey, &additionalDirectories, &editorState,
+		&proxyEnabled, &proxyBaseURL, &proxyModelOverride, &proxyAPIKey, &additionalDirectories, &editorState, &folderID,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("session not found: %s", sessionID)
@@ -1510,6 +1583,11 @@ func (s *SQLiteStore) GetSession(ctx context.Context, sessionID string) (*Sessio
 		session.EditorState = &editorState.String
 	}
 
+	// Handle folder ID
+	if folderID.Valid {
+		session.FolderID = &folderID.String
+	}
+
 	return &session, nil
 }
 
@@ -1523,7 +1601,7 @@ func (s *SQLiteStore) GetSessionByRunID(ctx context.Context, runID string) (*Ses
 			cost_usd, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, effective_context_tokens,
 			duration_ms, num_turns, result_content, error_message, auto_accept_edits, archived,
 			dangerously_skip_permissions, dangerously_skip_permissions_expires_at, dangerously_skip_permissions_timeout_ms,
-			proxy_enabled, proxy_base_url, proxy_model_override, proxy_api_key, additional_directories, editor_state
+			proxy_enabled, proxy_base_url, proxy_model_override, proxy_api_key, additional_directories, editor_state, folder_id
 		FROM sessions
 		WHERE run_id = ?
 	`
@@ -1543,6 +1621,7 @@ func (s *SQLiteStore) GetSessionByRunID(ctx context.Context, runID string) (*Ses
 	var proxyBaseURL, proxyModelOverride, proxyAPIKey sql.NullString
 	var additionalDirectories sql.NullString
 	var editorState sql.NullString
+	var folderID sql.NullString
 
 	err := s.db.QueryRowContext(ctx, query, runID).Scan(
 		&session.ID, &session.RunID, &claudeSessionID, &parentSessionID,
@@ -1553,7 +1632,7 @@ func (s *SQLiteStore) GetSessionByRunID(ctx context.Context, runID string) (*Ses
 		&costUSD, &inputTokens, &outputTokens, &cacheCreationInputTokens, &cacheReadInputTokens, &effectiveContextTokens,
 		&durationMS, &numTurns, &resultContent, &errorMessage, &session.AutoAcceptEdits,
 		&archived, &session.DangerouslySkipPermissions, &dangerouslySkipPermissionsExpiresAt, &dangerouslySkipPermissionsTimeoutMs,
-		&proxyEnabled, &proxyBaseURL, &proxyModelOverride, &proxyAPIKey, &additionalDirectories, &editorState,
+		&proxyEnabled, &proxyBaseURL, &proxyModelOverride, &proxyAPIKey, &additionalDirectories, &editorState, &folderID,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil // No session found
@@ -1640,6 +1719,11 @@ func (s *SQLiteStore) GetSessionByRunID(ctx context.Context, runID string) (*Ses
 		session.EditorState = &editorState.String
 	}
 
+	// Handle folder ID
+	if folderID.Valid {
+		session.FolderID = &folderID.String
+	}
+
 	return &session, nil
 }
 
@@ -1653,7 +1737,7 @@ func (s *SQLiteStore) ListSessions(ctx context.Context) ([]*Session, error) {
 			cost_usd, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, effective_context_tokens,
 		duration_ms, num_turns, result_content, error_message, auto_accept_edits, archived,
 			dangerously_skip_permissions, dangerously_skip_permissions_expires_at, dangerously_skip_permissions_timeout_ms,
-			proxy_enabled, proxy_base_url, proxy_model_override, proxy_api_key, additional_directories, editor_state
+			proxy_enabled, proxy_base_url, proxy_model_override, proxy_api_key, additional_directories, editor_state, folder_id
 		FROM sessions
 		ORDER BY last_activity_at DESC
 	`
@@ -1681,6 +1765,7 @@ func (s *SQLiteStore) ListSessions(ctx context.Context) ([]*Session, error) {
 		var proxyBaseURL, proxyModelOverride, proxyAPIKey sql.NullString
 		var additionalDirectories sql.NullString
 		var editorState sql.NullString
+		var folderID sql.NullString
 
 		err := rows.Scan(
 			&session.ID, &session.RunID, &claudeSessionID, &parentSessionID,
@@ -1691,7 +1776,7 @@ func (s *SQLiteStore) ListSessions(ctx context.Context) ([]*Session, error) {
 			&costUSD, &inputTokens, &outputTokens, &cacheCreationInputTokens, &cacheReadInputTokens, &effectiveContextTokens,
 			&durationMS, &numTurns, &resultContent, &errorMessage, &session.AutoAcceptEdits,
 			&archived, &session.DangerouslySkipPermissions, &dangerouslySkipPermissionsExpiresAt, &dangerouslySkipPermissionsTimeoutMs,
-			&proxyEnabled, &proxyBaseURL, &proxyModelOverride, &proxyAPIKey, &additionalDirectories, &editorState,
+			&proxyEnabled, &proxyBaseURL, &proxyModelOverride, &proxyAPIKey, &additionalDirectories, &editorState, &folderID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan session: %w", err)
@@ -1777,6 +1862,11 @@ func (s *SQLiteStore) ListSessions(ctx context.Context) ([]*Session, error) {
 			session.EditorState = &editorState.String
 		}
 
+		// Handle folder ID
+		if folderID.Valid {
+			session.FolderID = &folderID.String
+		}
+
 		sessions = append(sessions, &session)
 	}
 
@@ -1804,7 +1894,7 @@ func (s *SQLiteStore) SearchSessionsByTitle(ctx context.Context, query string, l
 			cost_usd, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, effective_context_tokens,
 			duration_ms, num_turns, result_content, error_message, auto_accept_edits, archived,
 			dangerously_skip_permissions, dangerously_skip_permissions_expires_at, dangerously_skip_permissions_timeout_ms,
-			proxy_enabled, proxy_base_url, proxy_model_override, proxy_api_key, additional_directories, editor_state
+			proxy_enabled, proxy_base_url, proxy_model_override, proxy_api_key, additional_directories, editor_state, folder_id
 		FROM sessions
 		WHERE 1=1
 		AND NOT EXISTS (
@@ -1854,6 +1944,7 @@ func (s *SQLiteStore) SearchSessionsByTitle(ctx context.Context, query string, l
 		var proxyBaseURL, proxyModelOverride, proxyAPIKey sql.NullString
 		var additionalDirectories sql.NullString
 		var editorState sql.NullString
+		var folderID sql.NullString
 
 		err := rows.Scan(
 			&session.ID, &session.RunID, &claudeSessionID, &parentSessionID,
@@ -1864,7 +1955,7 @@ func (s *SQLiteStore) SearchSessionsByTitle(ctx context.Context, query string, l
 			&costUSD, &inputTokens, &outputTokens, &cacheCreationInputTokens, &cacheReadInputTokens, &effectiveContextTokens,
 			&durationMS, &numTurns, &resultContent, &errorMessage, &session.AutoAcceptEdits,
 			&archived, &session.DangerouslySkipPermissions, &dangerouslySkipPermissionsExpiresAt, &dangerouslySkipPermissionsTimeoutMs,
-			&proxyEnabled, &proxyBaseURL, &proxyModelOverride, &proxyAPIKey, &additionalDirectories, &editorState,
+			&proxyEnabled, &proxyBaseURL, &proxyModelOverride, &proxyAPIKey, &additionalDirectories, &editorState, &folderID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan session: %w", err)
@@ -1948,6 +2039,11 @@ func (s *SQLiteStore) SearchSessionsByTitle(ctx context.Context, query string, l
 		// Handle editor state
 		if editorState.Valid {
 			session.EditorState = &editorState.String
+		}
+
+		// Handle folder ID
+		if folderID.Valid {
+			session.FolderID = &folderID.String
 		}
 
 		sessions = append(sessions, &session)
@@ -3017,4 +3113,271 @@ func (s *SQLiteStore) GetEventCount(ctx context.Context) (int, error) {
 	var count int
 	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM conversation_events").Scan(&count)
 	return count, err
+}
+
+// CreateFolder creates a new folder
+func (s *SQLiteStore) CreateFolder(ctx context.Context, folder *Folder) error {
+	now := time.Now()
+	if folder.CreatedAt.IsZero() {
+		folder.CreatedAt = now
+	}
+	if folder.UpdatedAt.IsZero() {
+		folder.UpdatedAt = now
+	}
+
+	query := `
+		INSERT INTO folders (id, name, parent_id, position, archived, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := s.db.ExecContext(ctx, query,
+		folder.ID, folder.Name, folder.ParentID, folder.Position, folder.Archived,
+		folder.CreatedAt, folder.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create folder: %w", err)
+	}
+	return nil
+}
+
+// GetFolder retrieves a folder by ID with session count
+func (s *SQLiteStore) GetFolder(ctx context.Context, id string) (*Folder, error) {
+	query := `
+		SELECT f.id, f.name, f.parent_id, f.position, f.archived, f.created_at, f.updated_at,
+			(SELECT COUNT(*) FROM sessions WHERE folder_id = f.id) as session_count
+		FROM folders f
+		WHERE f.id = ?
+	`
+
+	var folder Folder
+	var parentID sql.NullString
+	err := s.db.QueryRowContext(ctx, query, id).Scan(
+		&folder.ID, &folder.Name, &parentID, &folder.Position, &folder.Archived,
+		&folder.CreatedAt, &folder.UpdatedAt, &folder.SessionCount,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get folder: %w", err)
+	}
+
+	if parentID.Valid {
+		folder.ParentID = &parentID.String
+	}
+
+	return &folder, nil
+}
+
+// ListFolders retrieves all folders with session counts
+func (s *SQLiteStore) ListFolders(ctx context.Context, includeArchived bool) ([]*Folder, error) {
+	query := `
+		SELECT f.id, f.name, f.parent_id, f.position, f.archived, f.created_at, f.updated_at,
+			(SELECT COUNT(*) FROM sessions WHERE folder_id = f.id) as session_count
+		FROM folders f
+	`
+	if !includeArchived {
+		query += " WHERE f.archived = 0"
+	}
+	query += " ORDER BY f.position, f.created_at"
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list folders: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var folders []*Folder
+	for rows.Next() {
+		var folder Folder
+		var parentID sql.NullString
+		err := rows.Scan(
+			&folder.ID, &folder.Name, &parentID, &folder.Position, &folder.Archived,
+			&folder.CreatedAt, &folder.UpdatedAt, &folder.SessionCount,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan folder: %w", err)
+		}
+		if parentID.Valid {
+			folder.ParentID = &parentID.String
+		}
+		folders = append(folders, &folder)
+	}
+
+	return folders, rows.Err()
+}
+
+// UpdateFolder updates folder properties
+func (s *SQLiteStore) UpdateFolder(ctx context.Context, id string, updates FolderUpdate) error {
+	setParts := []string{"updated_at = ?"}
+	args := []interface{}{time.Now()}
+
+	if updates.Name != nil {
+		setParts = append(setParts, "name = ?")
+		args = append(args, *updates.Name)
+	}
+	if updates.ParentID != nil {
+		setParts = append(setParts, "parent_id = ?")
+		if *updates.ParentID != nil {
+			args = append(args, **updates.ParentID)
+		} else {
+			args = append(args, nil)
+		}
+	}
+	if updates.Position != nil {
+		setParts = append(setParts, "position = ?")
+		args = append(args, *updates.Position)
+	}
+	if updates.Archived != nil {
+		setParts = append(setParts, "archived = ?")
+		args = append(args, *updates.Archived)
+	}
+
+	query := fmt.Sprintf("UPDATE folders SET %s WHERE id = ?", strings.Join(setParts, ", "))
+	args = append(args, id)
+
+	result, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("failed to update folder: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
+
+// GetFolderDepth returns the nesting depth of a folder (1 for root folders)
+func (s *SQLiteStore) GetFolderDepth(ctx context.Context, id string) (int, error) {
+	depth := 0
+	currentID := id
+
+	for currentID != "" {
+		var parentID sql.NullString
+		err := s.db.QueryRowContext(ctx,
+			"SELECT parent_id FROM folders WHERE id = ?", currentID,
+		).Scan(&parentID)
+		if err == sql.ErrNoRows {
+			break
+		}
+		if err != nil {
+			return 0, fmt.Errorf("failed to get folder parent: %w", err)
+		}
+		depth++
+		if parentID.Valid {
+			currentID = parentID.String
+		} else {
+			break
+		}
+	}
+
+	return depth, nil
+}
+
+// IsDescendant checks if potentialDescendant is a descendant of ancestorID
+// by walking up the parent chain from potentialDescendant
+func (s *SQLiteStore) IsDescendant(ctx context.Context, ancestorID, potentialDescendant string) (bool, error) {
+	if ancestorID == potentialDescendant {
+		return true, nil // A folder is considered its own descendant for this check
+	}
+
+	currentID := potentialDescendant
+	visited := make(map[string]bool) // Cycle detection
+
+	for currentID != "" {
+		if visited[currentID] {
+			// Cycle detected in existing data - treat as not descendant
+			return false, nil
+		}
+		visited[currentID] = true
+
+		var parentID sql.NullString
+		err := s.db.QueryRowContext(ctx,
+			"SELECT parent_id FROM folders WHERE id = ?", currentID,
+		).Scan(&parentID)
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		if err != nil {
+			return false, fmt.Errorf("failed to get folder parent: %w", err)
+		}
+
+		if !parentID.Valid {
+			return false, nil // Reached root without finding ancestor
+		}
+
+		if parentID.String == ancestorID {
+			return true, nil // Found the ancestor
+		}
+
+		currentID = parentID.String
+	}
+
+	return false, nil
+}
+
+// GetSubtreeMaxDepth returns the maximum depth of children under folderID
+// Returns 0 if folder has no children
+func (s *SQLiteStore) GetSubtreeMaxDepth(ctx context.Context, folderID string) (int, error) {
+	// Use recursive CTE to find all descendants and their depths
+	query := `
+		WITH RECURSIVE descendants AS (
+			SELECT id, parent_id, 1 as depth
+			FROM folders
+			WHERE parent_id = ?
+
+			UNION ALL
+
+			SELECT f.id, f.parent_id, d.depth + 1
+			FROM folders f
+			INNER JOIN descendants d ON f.parent_id = d.id
+		)
+		SELECT COALESCE(MAX(depth), 0) FROM descendants
+	`
+
+	var maxDepth int
+	err := s.db.QueryRowContext(ctx, query, folderID).Scan(&maxDepth)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get subtree max depth: %w", err)
+	}
+
+	return maxDepth, nil
+}
+
+// ArchiveFolderCascade archives a folder and all sessions within it
+func (s *SQLiteStore) ArchiveFolderCascade(ctx context.Context, id string) error {
+	// Start a transaction
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Archive the folder
+	_, err = tx.ExecContext(ctx,
+		"UPDATE folders SET archived = 1, updated_at = ? WHERE id = ?",
+		time.Now(), id,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to archive folder: %w", err)
+	}
+
+	// Archive all sessions in the folder
+	_, err = tx.ExecContext(ctx,
+		"UPDATE sessions SET archived = 1 WHERE folder_id = ?",
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to archive folder sessions: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
 }

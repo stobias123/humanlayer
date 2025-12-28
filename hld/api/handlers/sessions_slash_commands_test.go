@@ -202,6 +202,43 @@ func (m *MockStore) Close() error {
 	return args.Error(0)
 }
 
+// Folder methods
+func (m *MockStore) CreateFolder(ctx context.Context, folder *store.Folder) error {
+	args := m.Called(ctx, folder)
+	return args.Error(0)
+}
+
+func (m *MockStore) GetFolder(ctx context.Context, id string) (*store.Folder, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*store.Folder), args.Error(1)
+}
+
+func (m *MockStore) ListFolders(ctx context.Context, includeArchived bool) ([]*store.Folder, error) {
+	args := m.Called(ctx, includeArchived)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.Folder), args.Error(1)
+}
+
+func (m *MockStore) UpdateFolder(ctx context.Context, id string, updates store.FolderUpdate) error {
+	args := m.Called(ctx, id, updates)
+	return args.Error(0)
+}
+
+func (m *MockStore) GetFolderDepth(ctx context.Context, id string) (int, error) {
+	args := m.Called(ctx, id)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockStore) ArchiveFolderCascade(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 func TestGetSlashCommands(t *testing.T) {
 	ctx := context.Background()
 

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hld-data
+  namespace: humanlayer
+  labels:
+    app.kubernetes.io/name: hld
+    app.kubernetes.io/component: daemon
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  # Uncomment and set if you need a specific storage class
+  # storageClassName: standard

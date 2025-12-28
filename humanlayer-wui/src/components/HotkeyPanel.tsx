@@ -33,6 +33,7 @@ const hotkeyData = [
   { category: 'Global', key: '⌘+⇧+S', description: 'Toggle settings dialog' },
   { category: 'Global', key: '⌘+⇧+F', description: 'Open feedback URL' },
   { category: 'Global', key: '⌘+⇧+Y', description: 'Toggle launch theme' },
+  { category: 'Global', key: '\\', description: 'Toggle sidebar' },
 
   // Session List
   { category: 'Session List', key: 'J', description: 'Move down' },

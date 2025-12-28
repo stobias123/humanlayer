@@ -348,6 +348,21 @@ func (h *SessionHandlers) ListSessions(ctx context.Context, req api.ListSessions
 			continue
 		}
 
+		// Apply folder filter if specified
+		if req.Params.FolderId != nil {
+			if *req.Params.FolderId == "" {
+				// Filter for sessions without a folder
+				if s.FolderID != nil && *s.FolderID != "" {
+					continue
+				}
+			} else {
+				// Filter for specific folder
+				if s.FolderID == nil || *s.FolderID != *req.Params.FolderId {
+					continue
+				}
+			}
+		}
+
 		filtered = append(filtered, s)
 	}
 
@@ -384,6 +399,7 @@ func (h *SessionHandlers) ListSessions(ctx context.Context, req api.ListSessions
 			ProxyBaseURL:                        info.ProxyBaseURL,
 			ProxyModelOverride:                  info.ProxyModelOverride,
 			ProxyAPIKey:                         info.ProxyAPIKey,
+			FolderID:                            info.FolderID,
 		}
 
 		// Copy result data if available

@@ -21,6 +21,11 @@ export const HOTKEY_SCOPES = {
   ADDITIONAL_DIRECTORIES: 'additionalDirectories',
   SESSION_LAUNCHER: 'sessions.launcher',
   TELEMETRY_MODAL: 'telemetry-modal',
+  CREATE_FOLDER_DIALOG: 'createFolderDialog',
+  MOVE_TO_FOLDER_DIALOG: 'moveToFolderDialog',
+  RENAME_FOLDER_DIALOG: 'renameFolderDialog',
+  MOVE_FOLDER_DIALOG: 'moveFolderDialog',
+  DELETE_FOLDER_DIALOG: 'deleteFolderDialog',
 } as const
 
 export type HotkeyScope = (typeof HOTKEY_SCOPES)[keyof typeof HOTKEY_SCOPES]

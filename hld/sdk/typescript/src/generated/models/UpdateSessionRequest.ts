@@ -117,6 +117,12 @@ export interface UpdateSessionRequest {
      * @memberof UpdateSessionRequest
      */
     status?: SessionStatus;
+    /**
+     * Move session to a folder (null to remove from folder)
+     * @type {string}
+     * @memberof UpdateSessionRequest
+     */
+    folderId?: string;
 }
 
 
@@ -153,6 +159,7 @@ export function UpdateSessionRequestFromJSONTyped(json: any, ignoreDiscriminator
         'workingDir': json['working_dir'] == null ? undefined : json['working_dir'],
         'editorState': json['editor_state'] == null ? undefined : json['editor_state'],
         'status': json['status'] == null ? undefined : SessionStatusFromJSON(json['status']),
+        'folderId': json['folder_id'] == null ? undefined : json['folder_id'],
     };
 }
 
@@ -182,6 +189,7 @@ export function UpdateSessionRequestToJSONTyped(value?: UpdateSessionRequest | n
         'working_dir': value['workingDir'],
         'editor_state': value['editorState'],
         'status': SessionStatusToJSON(value['status']),
+        'folder_id': value['folderId'],
     };
 }
 

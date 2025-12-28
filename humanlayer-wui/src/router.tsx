@@ -3,6 +3,8 @@ import { Layout } from '@/components/Layout'
 import { SessionTablePage } from '@/pages/SessionTablePage'
 import { SessionDetailPage } from '@/pages/SessionDetailPage'
 import { DraftSessionPage } from '@/pages/DraftSessionPage'
+import { ThoughtsPage } from '@/pages/ThoughtsPage'
+import { ThoughtDetailPage } from '@/pages/ThoughtDetailPage'
 import { QuickLauncher } from '@/components/QuickLauncher'
 import StoreDemo from '@/pages/StoreDemo'
 import WuiDemo from '@/pages/WuiDemo'
@@ -26,6 +28,14 @@ export const router = createHashRouter([
       {
         path: 'sessions/:sessionId',
         element: <SessionDetailPage />,
+      },
+      {
+        path: 'thoughts',
+        element: <ThoughtsPage />,
+      },
+      {
+        path: 'thoughts/*',
+        element: <ThoughtDetailPage />,
       },
     ],
   },

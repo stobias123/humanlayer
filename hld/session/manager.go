@@ -889,6 +889,7 @@ func (m *Manager) ListSessions() []Info {
 			ProxyBaseURL:                        dbSession.ProxyBaseURL,
 			ProxyModelOverride:                  dbSession.ProxyModelOverride,
 			ProxyAPIKey:                         dbSession.ProxyAPIKey,
+			FolderID:                            dbSession.FolderID,
 		}
 
 		// Set end time if completed

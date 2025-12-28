@@ -3,7 +3,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useEffect, useRef, useState } from 'react'
-import { CircleOff, CheckSquare, Square, Pencil, ShieldOff } from 'lucide-react'
+import { CircleOff, CheckSquare, Square, Pencil, ShieldOff, Folder } from 'lucide-react'
+import { MoveToFolderDialog } from '@/components/MoveToFolderDialog'
 import { SentryErrorBoundary } from '@/components/ErrorBoundary'
 import { getStatusTextClass } from '@/utils/component-utils'
 import { usePostHogTracking } from '@/hooks/usePostHogTracking'
@@ -72,14 +73,31 @@ function SessionTableInner({
     bulkArchiveSessions,
     bulkSelect,
     bulkDiscardDrafts,
+    moveSessionsToFolder,
+    folders,
+    currentFolderId,
   } = useStore()
 
   // Determine scope based on archived state
   const tableScope = isArchivedView ? HOTKEY_SCOPES.SESSIONS_ARCHIVED : HOTKEY_SCOPES.SESSIONS
 
+  // Show folder column only when viewing "All Sessions" (no folder filter)
+  const showFolderColumn = currentFolderId === null
+
+  // Helper to get folder name from ID
+  const getFolderName = (folderId: string | undefined | null): string | null => {
+    if (!folderId) return null
+    const folder = folders.find(f => f.id === folderId)
+    return folder?.name ?? null
+  }
+
   // State for inline editing
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
+
+  // State for move-to-folder dialog
+  const [moveToFolderDialogOpen, setMoveToFolderDialogOpen] = useState(false)
+  const [sessionsToMove, setSessionsToMove] = useState<string[]>([])
 
   // Helper functions for inline editing
   const startEdit = (sessionId: string, currentTitle: string, currentSummary: string) => {
@@ -108,6 +126,17 @@ function SessionTableInner({
   const cancelEdit = () => {
     setEditingSessionId(null)
     setEditValue('')
+  }
+
+  // Handler for move to folder
+  const handleMoveToFolder = async (folderId: string | null) => {
+    if (sessionsToMove.length > 0) {
+      await moveSessionsToFolder(sessionsToMove, folderId)
+      // Clear selection after move
+      if (selectedSessions.size > 0) {
+        useStore.getState().clearSelection()
+      }
+    }
   }
 
   // Direct discard handlers (no confirmation modal)
@@ -654,6 +683,39 @@ function SessionTableInner({
     [focusedSession, selectedSessions, onBypassPermissions, isInlineRenameOpen],
   )
 
+  // Move to folder hotkey
+  useHotkeys(
+    'm',
+    () => {
+      if (!focusedSession && selectedSessions.size === 0) {
+        return
+      }
+
+      // Get sessions to move
+      const sessions =
+        selectedSessions.size > 0
+          ? Array.from(selectedSessions)
+          : focusedSession
+            ? [focusedSession.id]
+            : []
+
+      if (sessions.length > 0) {
+        setSessionsToMove(sessions)
+        setMoveToFolderDialogOpen(true)
+      }
+    },
+    {
+      scopes: [tableScope],
+      enabled:
+        !isSessionLauncherOpen &&
+        !isInlineRenameOpen &&
+        (focusedSession !== null || selectedSessions.size > 0),
+      preventDefault: true,
+      enableOnFormTags: false,
+    },
+    [focusedSession, selectedSessions, isInlineRenameOpen],
+  )
+
   return (
     <HotkeyScopeBoundary
       scope={tableScope}
@@ -669,6 +731,7 @@ function SessionTableInner({
                 {!isDraftsView && <TableHead>Status</TableHead>}
                 <TableHead>Working Directory</TableHead>
                 <TableHead>Title</TableHead>
+                {showFolderColumn && <TableHead>Folder</TableHead>}
                 <TableHead>Model</TableHead>
                 <TableHead>Started</TableHead>
                 <TableHead>Last Activity</TableHead>
@@ -832,6 +895,18 @@ function SessionTableInner({
                       </div>
                     )}
                   </TableCell>
+                  {showFolderColumn && (
+                    <TableCell>
+                      {getFolderName(session.folderId) ? (
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Folder className="w-3.5 h-3.5" />
+                          <span className="text-sm">{getFolderName(session.folderId)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-sm italic">—</span>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell>{session.model || <CircleOff className="w-4 h-4" />}</TableCell>
                   <TableCell>
                     <Tooltip>
@@ -859,6 +934,13 @@ function SessionTableInner({
       ) : (
         <SessionsEmptyState />
       )}
+
+      <MoveToFolderDialog
+        open={moveToFolderDialogOpen}
+        onOpenChange={setMoveToFolderDialogOpen}
+        sessionIds={sessionsToMove}
+        onMove={handleMoveToFolder}
+      />
     </HotkeyScopeBoundary>
   )
 }

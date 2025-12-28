@@ -219,6 +219,12 @@ export interface Session {
      * @memberof Session
      */
     editorState?: string;
+    /**
+     * Folder this session belongs to
+     * @type {string}
+     * @memberof Session
+     */
+    folderId?: string;
 }
 
 
@@ -278,6 +284,7 @@ export function SessionFromJSONTyped(json: any, ignoreDiscriminator: boolean): S
         'proxyBaseUrl': json['proxy_base_url'] == null ? undefined : json['proxy_base_url'],
         'proxyModelOverride': json['proxy_model_override'] == null ? undefined : json['proxy_model_override'],
         'editorState': json['editor_state'] == null ? undefined : json['editor_state'],
+        'folderId': json['folder_id'] == null ? undefined : json['folder_id'],
     };
 }
 
@@ -324,6 +331,7 @@ export function SessionToJSONTyped(value?: Session | null, ignoreDiscriminator: 
         'proxy_base_url': value['proxyBaseUrl'],
         'proxy_model_override': value['proxyModelOverride'],
         'editor_state': value['editorState'],
+        'folder_id': value['folderId'],
     };
 }
 

@@ -51,6 +51,7 @@ export default function CommandPaletteMenu({ ref }: { ref: RefObject<HTMLDivElem
   const bulkArchiveSessions = useStore(state => state.bulkArchiveSessions)
   const setSettingsDialogOpen = useStore(state => state.setSettingsDialogOpen)
   const setHotkeyPanelOpen = useStore(state => state.setHotkeyPanelOpen)
+  const toggleSidebar = useStore(state => state.toggleSidebar)
 
   // Check if we're viewing a session detail
   const isSessionDetail = isViewingSessionDetail()
@@ -118,6 +119,15 @@ export default function CommandPaletteMenu({ ref }: { ref: RefObject<HTMLDivElem
         setHotkeyPanelOpen(true) // Then open hotkey panel
       },
       hotkey: '?',
+    },
+    {
+      id: 'toggle-sidebar',
+      label: 'Toggle Sidebar',
+      action: () => {
+        toggleSidebar()
+        close()
+      },
+      hotkey: '\\',
     },
     ...(isSessionDetail && internalSearchValue.toLowerCase().includes('brain')
       ? [

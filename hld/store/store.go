@@ -59,6 +59,19 @@ type ConversationStore interface {
 	GetUserSettings(ctx context.Context) (*UserSettings, error)
 	UpdateUserSettings(ctx context.Context, settings UserSettings) error
 
+	// Folder operations
+	CreateFolder(ctx context.Context, folder *Folder) error
+	GetFolder(ctx context.Context, id string) (*Folder, error)
+	ListFolders(ctx context.Context, includeArchived bool) ([]*Folder, error)
+	UpdateFolder(ctx context.Context, id string, updates FolderUpdate) error
+	GetFolderDepth(ctx context.Context, id string) (int, error)
+	// IsDescendant checks if potentialDescendant is a descendant of ancestorID
+	IsDescendant(ctx context.Context, ancestorID, potentialDescendant string) (bool, error)
+	// GetSubtreeMaxDepth returns the maximum depth of the subtree rooted at folderID
+	// Returns 0 if folder has no children, 1 if folder has children but no grandchildren, etc.
+	GetSubtreeMaxDepth(ctx context.Context, folderID string) (int, error)
+	ArchiveFolderCascade(ctx context.Context, id string) error
+
 	// Database lifecycle
 	Close() error
 }
@@ -119,6 +132,9 @@ type Session struct {
 
 	// Editor state for draft sessions (JSON blob)
 	EditorState *string `db:"editor_state"`
+
+	// Folder organization
+	FolderID *string `db:"folder_id"`
 }
 
 // SessionUpdate contains fields that can be updated
@@ -157,6 +173,28 @@ type SessionUpdate struct {
 	WorkingDir *string `db:"working_dir"`
 	// Editor state field (JSON blob)
 	EditorState *string `db:"editor_state"`
+	// Folder organization (double pointer for nullable update)
+	FolderID **string `db:"folder_id"`
+}
+
+// Folder represents a folder for organizing sessions
+type Folder struct {
+	ID           string
+	Name         string
+	ParentID     *string
+	Position     int
+	Archived     bool
+	SessionCount int // Computed, not stored
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// FolderUpdate contains fields that can be updated on a folder
+type FolderUpdate struct {
+	Name     *string
+	ParentID **string // Double pointer: nil=don't update, *nil=set to null, *"id"=set to id
+	Position *int
+	Archived *bool
 }
 
 // ConversationEvent represents a single event in a conversation

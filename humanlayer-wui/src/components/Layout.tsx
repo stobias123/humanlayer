@@ -47,6 +47,7 @@ import { useDebugStore } from '@/stores/useDebugStore'
 import { HOTKEY_SCOPES } from '@/hooks/hotkeys/scopes'
 import { usePostHogTracking } from '@/hooks/usePostHogTracking'
 import { POSTHOG_EVENTS } from '@/lib/telemetry/events'
+import { Sidebar } from '@/components/Sidebar'
 
 export function Layout() {
   const [approvals, setApprovals] = useState<any[]>([])
@@ -65,7 +66,7 @@ export function Layout() {
   const { connected, connecting, version, healthStatus, connect, checkHealth } = useDaemonConnection()
 
   // Hotkey panel state from store
-  const { isHotkeyPanelOpen, setHotkeyPanelOpen } = useStore()
+  const { isHotkeyPanelOpen, setHotkeyPanelOpen, sidebarCollapsed, toggleSidebar } = useStore()
 
   // PostHog tracking
   const { trackEvent } = usePostHogTracking()
@@ -393,6 +394,7 @@ export function Layout() {
   const updateSessionStatus = useStore(state => state.updateSessionStatus)
   const fetchUserSettings = useStore(state => state.fetchUserSettings)
   const userSettings = useStore(state => state.userSettings)
+  const refreshFolders = useStore(state => state.refreshFolders)
 
   // Fetch user settings when connected
   useEffect(() => {
@@ -770,6 +772,20 @@ export function Layout() {
     },
   )
 
+  // G+T - Go to thoughts
+  useHotkeys(
+    'g>t',
+    e => {
+      e.stopPropagation()
+      navigate('/thoughts')
+    },
+    {
+      scopes: [HOTKEY_SCOPES.ROOT],
+      preventDefault: true,
+      enableOnFormTags: false,
+    },
+  )
+
   // Global hotkey for feedback
   // Don't specify scopes to make it work globally (defaults to wildcard '*')
   useHotkeys(
@@ -784,6 +800,18 @@ export function Layout() {
     {
       // No scopes specified - works in wildcard scope
       enabled: true,
+      preventDefault: true,
+    },
+  )
+
+  // Backslash to toggle sidebar
+  useHotkeys(
+    '\\',
+    () => {
+      toggleSidebar()
+    },
+    {
+      scopes: [HOTKEY_SCOPES.ROOT],
       preventDefault: true,
     },
   )
@@ -808,6 +836,13 @@ export function Layout() {
       loadSessions()
     }
   }, [connected])
+
+  // Load folders when connected
+  useEffect(() => {
+    if (connected) {
+      refreshFolders()
+    }
+  }, [connected, refreshFolders])
 
   // Refresh sessions on window focus
   useEffect(() => {
@@ -931,55 +966,62 @@ export function Layout() {
 
   return (
     <div className="h-screen flex flex-col bg-background text-foreground">
-      {/* Main content */}
-      <main className="flex-1 flex flex-col p-4 overflow-hidden">
-        {connected && (
-          <>
-            {location.pathname !== '/' && <Breadcrumbs />}
-            <div className="flex-1 overflow-y-auto" data-main-scroll-container>
-              <Outlet />
-            </div>
+      {/* Content area with sidebar */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sidebar */}
+        {connected && !sidebarCollapsed && <Sidebar />}
 
-            {approvals.length > 0 && (
-              <div className="mt-4 border-t border-border pt-4">
-                <h2 className="font-mono uppercase tracking-wider text-accent mb-4">
-                  Pending Approvals ({approvals.length})
-                </h2>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {approvals.map((approval, index) => (
-                    <div
-                      key={index}
-                      className="p-4 border border-border bg-secondary/20 font-mono text-sm"
-                    >
-                      <div className="mb-2">
-                        <span className="text-accent">Tool:</span> {approval.toolName}
-                      </div>
-                      <div className="mb-2">
-                        <span className="text-accent">Session:</span> {approval.sessionId.slice(0, 8)}
-                      </div>
-                      <div className="mb-3">
-                        <span className="text-accent">Input:</span> {JSON.stringify(approval.toolInput)}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button onClick={() => handleApproval(approval, true)} size="sm">
-                          Approve
-                        </Button>
-                        <Button
-                          onClick={() => handleApproval(approval, false)}
-                          variant="destructive"
-                          size="sm"
-                        >
-                          Deny
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        {/* Main content */}
+        <main className="flex-1 flex flex-col p-4 overflow-hidden">
+          {connected && (
+            <>
+              {location.pathname !== '/' && <Breadcrumbs />}
+              <div className="flex-1 overflow-y-auto" data-main-scroll-container>
+                <Outlet />
               </div>
-            )}
-          </>
-        )}
-      </main>
+
+              {approvals.length > 0 && (
+                <div className="mt-4 border-t border-border pt-4">
+                  <h2 className="font-mono uppercase tracking-wider text-accent mb-4">
+                    Pending Approvals ({approvals.length})
+                  </h2>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {approvals.map((approval, index) => (
+                      <div
+                        key={index}
+                        className="p-4 border border-border bg-secondary/20 font-mono text-sm"
+                      >
+                        <div className="mb-2">
+                          <span className="text-accent">Tool:</span> {approval.toolName}
+                        </div>
+                        <div className="mb-2">
+                          <span className="text-accent">Session:</span> {approval.sessionId.slice(0, 8)}
+                        </div>
+                        <div className="mb-3">
+                          <span className="text-accent">Input:</span>{' '}
+                          {JSON.stringify(approval.toolInput)}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button onClick={() => handleApproval(approval, true)} size="sm">
+                            Approve
+                          </Button>
+                          <Button
+                            onClick={() => handleApproval(approval, false)}
+                            variant="destructive"
+                            size="sm"
+                          >
+                            Deny
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </main>
+      </div>
 
       {/* Status bar */}
       <div className="flex justify-between items-center px-3 py-1.5 border-t border-border bg-secondary/30">

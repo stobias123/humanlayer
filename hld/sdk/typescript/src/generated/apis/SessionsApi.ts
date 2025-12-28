@@ -17,6 +17,8 @@ import * as runtime from '../runtime';
 import type {
   BulkArchiveRequest,
   BulkArchiveResponse,
+  BulkMoveSessionsRequest,
+  BulkMoveSessionsResponse,
   BulkRestoreDraftsRequest,
   BulkRestoreDraftsResponse,
   ContinueSessionRequest,
@@ -41,6 +43,10 @@ import {
     BulkArchiveRequestToJSON,
     BulkArchiveResponseFromJSON,
     BulkArchiveResponseToJSON,
+    BulkMoveSessionsRequestFromJSON,
+    BulkMoveSessionsRequestToJSON,
+    BulkMoveSessionsResponseFromJSON,
+    BulkMoveSessionsResponseToJSON,
     BulkRestoreDraftsRequestFromJSON,
     BulkRestoreDraftsRequestToJSON,
     BulkRestoreDraftsResponseFromJSON,
@@ -81,6 +87,10 @@ import {
 
 export interface BulkArchiveSessionsRequest {
     bulkArchiveRequest: BulkArchiveRequest;
+}
+
+export interface BulkMoveSessionsOperationRequest {
+    bulkMoveSessionsRequest: BulkMoveSessionsRequest;
 }
 
 export interface BulkRestoreDraftsOperationRequest {
@@ -137,6 +147,7 @@ export interface LaunchDraftSessionOperationRequest {
 export interface ListSessionsRequest {
     leavesOnly?: boolean;
     filter?: ListSessionsFilterEnum;
+    folderId?: string;
 }
 
 export interface SearchSessionsRequest {
@@ -171,6 +182,22 @@ export interface SessionsApiInterface {
      * Bulk archive/unarchive sessions
      */
     bulkArchiveSessions(requestParameters: BulkArchiveSessionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BulkArchiveResponse>;
+
+    /**
+     * Move multiple sessions to a specified folder
+     * @summary Move sessions to a folder
+     * @param {BulkMoveSessionsRequest} bulkMoveSessionsRequest 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof SessionsApiInterface
+     */
+    bulkMoveSessionsRaw(requestParameters: BulkMoveSessionsOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BulkMoveSessionsResponse>>;
+
+    /**
+     * Move multiple sessions to a specified folder
+     * Move sessions to a folder
+     */
+    bulkMoveSessions(requestParameters: BulkMoveSessionsOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BulkMoveSessionsResponse>;
 
     /**
      * Restore multiple discarded draft sessions back to draft status
@@ -372,6 +399,7 @@ export interface SessionsApiInterface {
      * @summary List sessions
      * @param {boolean} [leavesOnly] Return only leaf sessions (sessions with no children)
      * @param {'normal' | 'archived' | 'draft'} [filter] Filter sessions by type
+     * @param {string} [folderId] Filter sessions by folder ID. Empty string for sessions without folder.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof SessionsApiInterface
@@ -385,9 +413,9 @@ export interface SessionsApiInterface {
     listSessions(requestParameters: ListSessionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SessionsResponse>;
 
     /**
-     * Search for sessions using SQL LIKE queries against the title field. Returns top sessions ordered by last_activity_at descending. Limited to 20 most recently modified sessions for performance. 
-     * @summary Search sessions by title
-     * @param {string} [query] Search query for title matching (uses SQL LIKE)
+     * Search for sessions using SQL LIKE queries across title, summary, and query fields. Only returns \"normal\" leaf sessions (not archived, not draft, not discarded, no children). Returns top sessions ordered by last_activity_at descending. Limited to 20 most recently modified sessions for performance. 
+     * @summary Search sessions
+     * @param {string} [query] Search query for matching against title, summary, or query fields (uses SQL LIKE)
      * @param {number} [limit] Maximum number of results to return
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -396,8 +424,8 @@ export interface SessionsApiInterface {
     searchSessionsRaw(requestParameters: SearchSessionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SessionSearchResponse>>;
 
     /**
-     * Search for sessions using SQL LIKE queries against the title field. Returns top sessions ordered by last_activity_at descending. Limited to 20 most recently modified sessions for performance. 
-     * Search sessions by title
+     * Search for sessions using SQL LIKE queries across title, summary, and query fields. Only returns \"normal\" leaf sessions (not archived, not draft, not discarded, no children). Returns top sessions ordered by last_activity_at descending. Limited to 20 most recently modified sessions for performance. 
+     * Search sessions
      */
     searchSessions(requestParameters: SearchSessionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SessionSearchResponse>;
 
@@ -463,6 +491,47 @@ export class SessionsApi extends runtime.BaseAPI implements SessionsApiInterface
      */
     async bulkArchiveSessions(requestParameters: BulkArchiveSessionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BulkArchiveResponse> {
         const response = await this.bulkArchiveSessionsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Move multiple sessions to a specified folder
+     * Move sessions to a folder
+     */
+    async bulkMoveSessionsRaw(requestParameters: BulkMoveSessionsOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BulkMoveSessionsResponse>> {
+        if (requestParameters['bulkMoveSessionsRequest'] == null) {
+            throw new runtime.RequiredError(
+                'bulkMoveSessionsRequest',
+                'Required parameter "bulkMoveSessionsRequest" was null or undefined when calling bulkMoveSessions().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/sessions/move`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: BulkMoveSessionsRequestToJSON(requestParameters['bulkMoveSessionsRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => BulkMoveSessionsResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Move multiple sessions to a specified folder
+     * Move sessions to a folder
+     */
+    async bulkMoveSessions(requestParameters: BulkMoveSessionsOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BulkMoveSessionsResponse> {
+        const response = await this.bulkMoveSessionsRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -974,6 +1043,10 @@ export class SessionsApi extends runtime.BaseAPI implements SessionsApiInterface
             queryParameters['filter'] = requestParameters['filter'];
         }
 
+        if (requestParameters['folderId'] != null) {
+            queryParameters['folder_id'] = requestParameters['folderId'];
+        }
+
         const headerParameters: runtime.HTTPHeaders = {};
 
 
@@ -999,8 +1072,8 @@ export class SessionsApi extends runtime.BaseAPI implements SessionsApiInterface
     }
 
     /**
-     * Search for sessions using SQL LIKE queries against the title field. Returns top sessions ordered by last_activity_at descending. Limited to 20 most recently modified sessions for performance. 
-     * Search sessions by title
+     * Search for sessions using SQL LIKE queries across title, summary, and query fields. Only returns \"normal\" leaf sessions (not archived, not draft, not discarded, no children). Returns top sessions ordered by last_activity_at descending. Limited to 20 most recently modified sessions for performance. 
+     * Search sessions
      */
     async searchSessionsRaw(requestParameters: SearchSessionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SessionSearchResponse>> {
         const queryParameters: any = {};
@@ -1029,8 +1102,8 @@ export class SessionsApi extends runtime.BaseAPI implements SessionsApiInterface
     }
 
     /**
-     * Search for sessions using SQL LIKE queries against the title field. Returns top sessions ordered by last_activity_at descending. Limited to 20 most recently modified sessions for performance. 
-     * Search sessions by title
+     * Search for sessions using SQL LIKE queries across title, summary, and query fields. Only returns \"normal\" leaf sessions (not archived, not draft, not discarded, no children). Returns top sessions ordered by last_activity_at descending. Limited to 20 most recently modified sessions for performance. 
+     * Search sessions
      */
     async searchSessions(requestParameters: SearchSessionsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SessionSearchResponse> {
         const response = await this.searchSessionsRaw(requestParameters, initOverrides);

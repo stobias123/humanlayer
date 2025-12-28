@@ -65,6 +65,11 @@ fn set_macos_window_background_color_rgb(_window: &tauri::WebviewWindow, _r: f64
     // No-op on non-macOS platforms
 }
 
+#[cfg(not(target_os = "macos"))]
+fn set_macos_window_appearance(_window: &tauri::WebviewWindow, _is_dark: bool) {
+    // No-op on non-macOS platforms
+}
+
 // Tauri command to set window background color from JavaScript
 #[tauri::command]
 fn set_window_background_color(

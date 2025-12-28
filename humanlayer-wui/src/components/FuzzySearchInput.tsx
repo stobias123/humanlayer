@@ -1,7 +1,7 @@
-import { homeDir } from '@tauri-apps/api/path'
-import { DirEntry, readDir } from '@tauri-apps/plugin-fs'
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import { browseDirectory, isDirectoryBrowsingAvailable } from '@/lib/filesystem'
+import type { DirectoryEntry } from '@/lib/filesystem'
 import { fuzzySearch, highlightMatches, type FuzzyMatch } from '@/lib/fuzzy-search'
 import { Input } from './ui/input'
 import { Popover, PopoverAnchor, PopoverContent } from './ui/popover'
@@ -48,14 +48,15 @@ export function SearchInput({
   const [isInvalidPath, setIsInvalidPath] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const [directoryPreview, setDirectoryPreview] = useState<
-    { path: DirEntry; matches?: FuzzyMatch['matches'] }[]
+    { path: DirectoryEntry; matches?: FuzzyMatch['matches'] }[]
   >([])
   const [recentPreview, setRecentPreview] = useState<
     { path: string; matches?: FuzzyMatch['matches'] }[]
   >([])
   const [lastValidPath, setLastValidPath] = useState('')
-  const [allDirectories, setAllDirectories] = useState<DirEntry[]>([])
+  const [allDirectories, setAllDirectories] = useState<DirectoryEntry[]>([])
   const [selectedIndex, setSelectedIndex] = useState<number>(0)
+  const [browsingAvailable, setBrowsingAvailable] = useState(true)
   const keyboardNavTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -66,6 +67,11 @@ export function SearchInput({
     TAB: 'tab',
     ESCAPE: 'escape',
   }
+
+  // Check if directory browsing is available
+  useEffect(() => {
+    isDirectoryBrowsingAvailable().then(setBrowsingAvailable)
+  }, [])
 
   useHotkeys(
     Object.values(Hotkeys).join(','),
@@ -163,51 +169,40 @@ export function SearchInput({
     // Reset selection to 0 when user types
     setSelectedIndex(0)
 
-    let searchPath = e.target.value
-
-    if (searchPath.startsWith('~')) {
-      const home = await homeDir()
-      searchPath = searchPath.replace(/^~(?=$|\/|\\)/, home)
-    }
+    const searchPath = e.target.value
 
     // Parse the path to separate directory and search term
     const lastSlashIdx = searchPath.lastIndexOf('/')
     const basePath = lastSlashIdx === -1 ? '' : searchPath.substring(0, lastSlashIdx + 1)
     const searchTerm = lastSlashIdx === -1 ? searchPath : searchPath.substring(lastSlashIdx + 1)
 
-    // Try to read the base directory
-    let entries: DirEntry[] = []
-    let shouldReadDir = false
-
-    // Only read directory if the base path has changed
-    if (basePath !== lastValidPath) {
-      shouldReadDir = true
-    }
+    // Try to read the base directory (only if browsing available)
+    let entries: DirectoryEntry[] = []
+    const shouldReadDir = browsingAvailable && basePath !== lastValidPath
 
     if (shouldReadDir) {
       try {
         const pathToRead = basePath || '.'
-        entries = await readDir(pathToRead)
-        const dirs = entries.filter(entry => entry.isDirectory)
-        setAllDirectories(dirs)
-        entries = dirs // Use filtered directories for fuzzy search
+        entries = await browseDirectory(pathToRead, {
+          includeDirectories: true,
+          includeFiles: false,
+          maxResults: 50,
+        })
+        setAllDirectories(entries)
         setLastValidPath(basePath)
         setIsInvalidPath(false)
       } catch {
-        // Keep showing last valid directories
         entries = allDirectories
         setIsInvalidPath(true)
       }
     } else {
-      // Use cached directories
       entries = allDirectories
     }
 
     // Filter directories based on search term
-    let dirObjs: Array<{ path: DirEntry; matches?: FuzzyMatch['matches'] }> = []
+    let dirObjs: Array<{ path: DirectoryEntry; matches?: FuzzyMatch['matches'] }> = []
 
     if (searchTerm) {
-      // Use fuzzy search to filter and rank directories
       const searchResults = fuzzySearch(entries, searchTerm, {
         keys: ['name'],
         threshold: 0.01,
@@ -220,10 +215,7 @@ export function SearchInput({
         matches: result.matches,
       }))
     } else {
-      // Show all directories if no search term
-      dirObjs = entries.map(dir => ({
-        path: dir,
-      }))
+      dirObjs = entries.map(dir => ({ path: dir }))
     }
 
     setDirectoryPreview(dirObjs)
@@ -233,7 +225,6 @@ export function SearchInput({
 
     if (recentDirectories.length > 0) {
       if (searchPath) {
-        // Use fuzzy search on the full path
         const recentSearchResults = fuzzySearch(
           recentDirectories.map(r => ({ path: r.path })),
           searchPath,
@@ -249,7 +240,6 @@ export function SearchInput({
           matches: result.matches,
         }))
       } else {
-        // Show all recent directories when no search term
         recentObjs = recentDirectories.slice(0, 10).map(recent => ({
           path: recent.path,
         }))
@@ -257,7 +247,6 @@ export function SearchInput({
     }
 
     setRecentPreview(recentObjs)
-    setDirectoryPreview(dirObjs)
   }
 
   return (
