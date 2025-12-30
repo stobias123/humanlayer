@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -7,19 +7,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useDaemonConnection } from '@/hooks/useDaemonConnection'
 import { daemonClient } from '@/lib/daemon'
-import { clearStoredDaemonUrl, getDaemonUrl, storeDaemonUrl } from '@/lib/daemon/http-config'
+import { getDaemonUrl } from '@/lib/daemon/http-config'
 import type { DebugInfo } from '@/lib/daemon/types'
 import { logger } from '@/lib/logging'
 import { type DaemonInfo, daemonService } from '@/services/daemon-service'
 import { useDebugStore } from '@/stores/useDebugStore'
-import { Copy, Database, Link, Loader2, RefreshCw, Server } from 'lucide-react'
+import { Copy, Database, Loader2, RefreshCw, Server } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { DaemonConnectionPanel } from './DaemonConnectionPanel'
 
 interface DebugPanelProps {
   open?: boolean
@@ -30,8 +30,6 @@ export function DebugPanel({ open, onOpenChange }: DebugPanelProps) {
   const { connected, reconnect } = useDaemonConnection()
   const [isRestarting, setIsRestarting] = useState(false)
   const [restartError, setRestartError] = useState<string | null>(null)
-  const [customUrl, setCustomUrl] = useState('')
-  const [connectError, setConnectError] = useState<string | null>(null)
   const [daemonType, setDaemonType] = useState<'managed' | 'external'>('managed')
   const [daemonInfo, setDaemonInfo] = useState<DaemonInfo | null>(null)
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null)
@@ -125,37 +123,8 @@ export function DebugPanel({ open, onOpenChange }: DebugPanelProps) {
     }
   }
 
-  async function handleConnectToCustom() {
-    setConnectError(null)
-
-    let url = customUrl.trim()
-
-    if (!isNaN(Number(url))) {
-      url = `http://127.0.0.1:${url}`
-    }
-
-    try {
-      await daemonService.connectToExisting(url)
-      // Store to localStorage (only when not in Tauri)
-      storeDaemonUrl(url)
-      await reconnect()
-      await loadDaemonInfo()
-      setCustomUrl('')
-    } catch (error: any) {
-      setConnectError(error.message || 'Failed to connect')
-    }
-  }
-
-  async function handleSwitchToManaged() {
-    try {
-      await daemonService.switchToManagedDaemon()
-      // Clear stored URL from localStorage (only when not in Tauri)
-      clearStoredDaemonUrl()
-      await reconnect()
-      await loadDaemonInfo()
-    } catch (error: any) {
-      setConnectError(error.message || 'Failed to switch to managed daemon')
-    }
+  async function handleConnectionChange() {
+    await loadDaemonInfo()
   }
 
   return (
@@ -209,7 +178,7 @@ export function DebugPanel({ open, onOpenChange }: DebugPanelProps) {
                 </span>
               </div>
 
-              {daemonType === 'managed' ? (
+              {daemonType === 'managed' && (
                 <Button
                   onClick={handleRestartDaemon}
                   disabled={isRestarting}
@@ -228,50 +197,13 @@ export function DebugPanel({ open, onOpenChange }: DebugPanelProps) {
                     </>
                   )}
                 </Button>
-              ) : (
-                <Button onClick={handleSwitchToManaged} className="w-full" variant="outline">
-                  Switch to Managed Daemon
-                </Button>
               )}
 
               {restartError && <p className="text-sm text-destructive">{restartError}</p>}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Connect to Existing Daemon</CardTitle>
-              <CardDescription className="text-xs">
-                Connect to a daemon running on a custom URL (or provide a port number).
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="space-y-1">
-                <Label htmlFor="url" className="text-sm">
-                  Daemon URL
-                </Label>
-                <Input
-                  id="url"
-                  type="text"
-                  placeholder="http://127.0.0.1:7777"
-                  value={customUrl}
-                  onChange={e => setCustomUrl(e.target.value)}
-                />
-              </div>
-
-              <Button
-                onClick={handleConnectToCustom}
-                disabled={!customUrl}
-                className="w-full"
-                variant="outline"
-              >
-                <Link className="mr-2 h-4 w-4" />
-                Connect
-              </Button>
-
-              {connectError && <p className="text-sm text-destructive">{connectError}</p>}
-            </CardContent>
-          </Card>
+          <DaemonConnectionPanel variant="card" onConnectionChange={handleConnectionChange} />
 
           <Card className="md:col-span-2">
             <CardHeader>

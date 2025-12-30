@@ -25,8 +25,8 @@ spec:
         fsGroup: 1000
       containers:
         - name: hld
-          image: humanlayer/hld:latest
-          imagePullPolicy: IfNotPresent
+          image: la-nuc-1:30500/hld:latest
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 7777

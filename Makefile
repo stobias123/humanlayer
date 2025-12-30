@@ -482,3 +482,33 @@ dev-status:
 	@echo ""
 	@echo "Active daemons:"
 	@ps aux | grep -E "hld(-dev|-nightly)?$$" | grep -v grep || echo "  No daemons running"
+
+# =============================================================================
+# Kubernetes Deployment (hld daemon)
+# =============================================================================
+
+.PHONY: hld-docker-build hld-docker-push hld-k8s-deploy hld-k8s-destroy hld-k8s-status hld-k8s-logs hld-k8s-logs-f hld-k8s-port-forward
+
+hld-docker-build: ## Build hld Docker image (auto-increments version)
+	@$(MAKE) -C hld docker-build
+
+hld-docker-push: ## Push hld Docker image to registry
+	@$(MAKE) -C hld docker-push
+
+hld-k8s-deploy: ## Build and deploy hld to Kubernetes
+	@$(MAKE) -C hld k8s-deploy
+
+hld-k8s-destroy: ## Delete hld Kubernetes deployment
+	@$(MAKE) -C hld k8s-destroy
+
+hld-k8s-status: ## Show hld Kubernetes deployment status
+	@$(MAKE) -C hld k8s-status
+
+hld-k8s-logs: ## View hld pod logs
+	@$(MAKE) -C hld k8s-logs
+
+hld-k8s-logs-f: ## Follow hld pod logs
+	@$(MAKE) -C hld k8s-logs-f
+
+hld-k8s-port-forward: ## Port forward hld service to localhost:7777
+	@$(MAKE) -C hld k8s-port-forward

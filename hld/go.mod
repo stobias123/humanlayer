@@ -2,10 +2,7 @@ module github.com/humanlayer/humanlayer/hld
 
 go 1.24.0
 
-replace (
-	github.com/humanlayer/humanlayer/claudecode-go => ../claudecode-go
-	github.com/humanlayer/humanlayer/humanlayer-go => ../humanlayer-go
-)
+replace github.com/humanlayer/humanlayer/claudecode-go => ../claudecode-go
 
 require (
 	github.com/getkin/kin-openapi v0.132.0

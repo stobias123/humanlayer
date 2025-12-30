@@ -219,10 +219,9 @@ describe('useFileBrowser', () => {
   test('does not browse when unavailable', async () => {
     mockIsDirectoryBrowsingAvailable.mockResolvedValue(false)
 
-    const { result, rerender } = renderHook(
-      ({ path }) => useFileBrowser(path),
-      { initialProps: { path: '' } },
-    )
+    const { result, rerender } = renderHook(({ path }) => useFileBrowser(path), {
+      initialProps: { path: '' },
+    })
 
     // Wait for availability check
     await waitFor(() => {

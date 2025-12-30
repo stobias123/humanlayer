@@ -9,7 +9,6 @@ WORKDIR /src
 # Copy go.mod files first for better caching
 COPY hld/go.mod hld/go.sum ./hld/
 COPY claudecode-go/go.mod claudecode-go/go.sum ./claudecode-go/
-COPY humanlayer-go/go.mod humanlayer-go/go.sum ./humanlayer-go/
 
 # Download dependencies
 WORKDIR /src/hld
@@ -19,7 +18,6 @@ RUN go mod download
 WORKDIR /src
 COPY hld/ ./hld/
 COPY claudecode-go/ ./claudecode-go/
-COPY humanlayer-go/ ./humanlayer-go/
 
 # Build the binary
 WORKDIR /src/hld

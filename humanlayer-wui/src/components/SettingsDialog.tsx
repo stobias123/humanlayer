@@ -17,6 +17,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { appLogDir } from '@tauri-apps/api/path'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { copyToClipboard } from '@/utils/clipboard'
+import { DaemonConnectionPanel } from './DaemonConnectionPanel'
 
 interface SettingsDialogProps {
   open: boolean
@@ -436,6 +437,12 @@ export function SettingsDialog({ open, onOpenChange, onConfigUpdate }: SettingsD
                 onCheckedChange={handleTelemetryToggle}
                 disabled={!userSettings || saving}
               />
+            </div>
+
+            {/* Daemon Connection Section */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Daemon Connection</Label>
+              <DaemonConnectionPanel variant="inline" />
             </div>
 
             {/* Logs Section */}

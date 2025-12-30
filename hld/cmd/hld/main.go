@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -14,6 +15,8 @@ import (
 func main() {
 	// Parse command line flags
 	debug := flag.Bool("debug", false, "Enable debug logging")
+	httpHost := flag.String("http-host", "", "HTTP server host (overrides HUMANLAYER_DAEMON_HTTP_HOST)")
+	httpPort := flag.Int("http-port", 0, "HTTP server port (overrides HUMANLAYER_DAEMON_HTTP_PORT)")
 	flag.Parse()
 
 	// Set up structured logging
@@ -28,6 +31,23 @@ func main() {
 
 	if level == slog.LevelDebug {
 		slog.Debug("debug logging enabled")
+	}
+
+	// Apply CLI flag overrides via environment variables
+	// This ensures CLI flags take precedence over config file and existing env vars
+	if *httpHost != "" {
+		if err := os.Setenv("HUMANLAYER_DAEMON_HTTP_HOST", *httpHost); err != nil {
+			slog.Warn("failed to set HTTP host from flag", "error", err)
+		} else {
+			slog.Info("HTTP host set from CLI flag", "host", *httpHost)
+		}
+	}
+	if *httpPort > 0 {
+		if err := os.Setenv("HUMANLAYER_DAEMON_HTTP_PORT", fmt.Sprintf("%d", *httpPort)); err != nil {
+			slog.Warn("failed to set HTTP port from flag", "error", err)
+		} else {
+			slog.Info("HTTP port set from CLI flag", "port", *httpPort)
+		}
 	}
 
 	// Log current PATH environment variable (debug level to avoid test noise)

@@ -35,6 +35,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { MessageCircle, Bug, HelpCircle, Settings, AlertCircle, RefreshCw } from 'lucide-react'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { DebugPanel } from '@/components/DebugPanel'
+import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { notifyLogLocation } from '@/lib/log-notification'
 import '@/App.css'
 import { logger } from '@/lib/logging'
@@ -1118,18 +1119,12 @@ export function Layout() {
               </div>
             </TooltipContent>
           </Tooltip>
-          <div className="flex items-center gap-2 font-mono text-xs">
-            <span className="uppercase tracking-wider">
-              {connecting && 'CONNECTING...'}
-              {connected && version && `CONNECTED @ ${version}`}
-              {!connecting && !connected && 'DISCONNECTED'}
+          <ConnectionIndicator />
+          {connected && version && (
+            <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
+              v{version}
             </span>
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                connected ? 'bg-[--terminal-success]' : 'bg-[--terminal-error]'
-              }`}
-            ></span>
-          </div>
+          )}
         </div>
       </div>
 

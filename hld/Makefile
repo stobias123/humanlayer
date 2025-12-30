@@ -1,4 +1,5 @@
 .PHONY: build test test-unit test-unit-race test-unit-quiet test-unit-race-quiet test-integration test-integration-race test-integration-quiet test-integration-race-quiet test-quiet clean mocks generate check fmt vet lint
+.PHONY: docker-build docker-push k8s-deploy k8s-destroy k8s-status k8s-logs k8s-logs-f k8s-port-forward
 
 # Build the daemon binary
 build:
@@ -193,3 +194,28 @@ test-unit:
 	else \
 		$(MAKE) test-unit-quiet; \
 	fi
+
+# Kubernetes deployment commands
+docker-build:
+	./deploy.sh build
+
+docker-push:
+	./deploy.sh push
+
+k8s-deploy:
+	./deploy.sh deploy
+
+k8s-destroy:
+	./deploy.sh destroy
+
+k8s-status:
+	./deploy.sh status
+
+k8s-logs:
+	./deploy.sh logs
+
+k8s-logs-f:
+	./deploy.sh logs -f
+
+k8s-port-forward:
+	./deploy.sh port-forward 7777
