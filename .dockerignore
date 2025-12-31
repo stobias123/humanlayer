@@ -1,0 +1,59 @@
+# Dependencies - will be installed fresh in container
+**/node_modules
+
+# Build artifacts - will be built fresh in container
+hlyr/dist
+
+# Pre-built binaries (not needed for Docker)
+hlyr/humanlayer-darwin-arm64
+hlyr/humanlayer-linux-x64
+
+# Git
+.git
+**/.git
+
+# IDE and editor files
+.idea
+.vscode
+**/*.swp
+**/*.swo
+
+# OS files
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+# Test and dev files
+**/coverage
+**/.nyc_output
+
+# Documentation (not needed in container)
+docs
+
+# Other package directories we don't need
+humanlayer-ts
+humanlayer-ts-vercel-ai-sdk
+humanlayer-go
+humanlayer-wui
+examples
+
+# Python SDK (not needed)
+humanlayer
+
+# Other directories not needed for hld Docker build
+hack
+apps
+packages
+thoughts
+scripts
+k8s
+.claude
+
+# hld subdirectories not needed for build
+hld/sdk
+hld/e2e
+
+# Keep only what's needed:
+# - hld/ (Go daemon source, minus sdk/e2e)
+# - claudecode-go/ (Go SDK)
+# - hlyr/ (TypeScript CLI for MCP server, minus node_modules/dist)

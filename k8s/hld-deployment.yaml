@@ -19,10 +19,6 @@ spec:
         app.kubernetes.io/name: hld
         app.kubernetes.io/component: daemon
     spec:
-      securityContext:
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
       containers:
         - name: hld
           image: la-nuc-1:30500/hld:latest
@@ -35,10 +31,12 @@ spec:
             - configMapRef:
                 name: hld-config
             - secretRef:
-                name: hld-secrets
+                name: hld-secret
           volumeMounts:
             - name: data
               mountPath: /data
+            - name: src
+              mountPath: /src
           livenessProbe:
             httpGet:
               path: /api/v1/health
@@ -60,9 +58,12 @@ spec:
               memory: "64Mi"
               cpu: "100m"
             limits:
-              memory: "256Mi"
-              cpu: "500m"
+              memory: "1Gi"
+              cpu: "1"
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: hld-data
+        - name: src
+          persistentVolumeClaim:
+            claimName: hld-src

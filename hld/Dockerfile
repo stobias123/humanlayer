@@ -26,19 +26,37 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o /hld ./cmd/hld
 # Runtime stage
 FROM alpine:3.19
 
-# Install runtime dependencies
-RUN apk add --no-cache sqlite-libs ca-certificates
+# Install runtime dependencies including bash, curl, and other tools needed for Claude Code
+RUN apk add --no-cache sqlite-libs ca-certificates bash curl unzip libstdc++ libgcc
 
-# Create non-root user
-RUN adduser -D -u 1000 hld
+# Install Node.js for running hlyr MCP server
+RUN apk add --no-cache nodejs npm
+
+# Install bun
+RUN curl -fsSL https://bun.sh/install | bash && \
+    mv /root/.bun/bin/bun /usr/local/bin/bun && \
+    rm -rf /root/.bun
+
+# Install Claude Code
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# Copy and build hlyr CLI (for MCP server) - install to /opt to avoid /src PVC mount
+COPY hlyr/ /opt/hlyr/
+WORKDIR /opt/hlyr
+RUN bun install && bun run build
+
+# Create hlyr wrapper script
+RUN echo '#!/bin/sh' > /usr/local/bin/hlyr && \
+    echo 'exec node /opt/hlyr/dist/index.js "$@"' >> /usr/local/bin/hlyr && \
+    chmod +x /usr/local/bin/hlyr
+
+WORKDIR /
 
 # Create data directory
-RUN mkdir -p /data && chown hld:hld /data
+RUN mkdir -p /data 
 
 # Copy binary from builder
 COPY --from=builder /hld /usr/local/bin/hld
-
-USER hld
 
 EXPOSE 7777
 

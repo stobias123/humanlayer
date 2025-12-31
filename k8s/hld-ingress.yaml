@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hld
+  namespace: humanlayer
+  labels:
+    app.kubernetes.io/name: hld
+    app.kubernetes.io/component: daemon
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: hld.la-nuc-1.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hld
+                port:
+                  number: 7777
