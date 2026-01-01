@@ -27,6 +27,9 @@ spec:
             - name: http
               containerPort: 7777
               protocol: TCP
+          env:
+            - name: HUMANLAYER_WORKTREE_OVERRIDE_BASE
+              value: /src/repos
           envFrom:
             - configMapRef:
                 name: hld-config
@@ -37,6 +40,13 @@ spec:
               mountPath: /data
             - name: src
               mountPath: /src
+            - name: ssh-key
+              mountPath: /root/.ssh
+              readOnly: true
+            - name: gitconfig
+              mountPath: /root/.gitconfig
+              subPath: .gitconfig
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /api/v1/health
@@ -58,8 +68,8 @@ spec:
               memory: "64Mi"
               cpu: "100m"
             limits:
-              memory: "1Gi"
-              cpu: "1"
+              memory: "2Gi"
+              cpu: "2"
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -67,3 +77,11 @@ spec:
         - name: src
           persistentVolumeClaim:
             claimName: hld-src
+        - name: ssh-key
+          secret:
+            secretName: hld-ssh-key
+            defaultMode: 0600
+        - name: gitconfig
+          secret:
+            secretName: hld-gitconfig
+            defaultMode: 0644
