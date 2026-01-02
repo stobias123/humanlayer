@@ -1638,10 +1638,10 @@ func (h *SessionHandlers) GetSlashCommands(ctx context.Context, req api.GetSlash
 	// Respect CLAUDE_CONFIG_DIR for global commands
 	configDir := os.Getenv("CLAUDE_CONFIG_DIR")
 	if configDir == "" {
-		// Fall back to default Claude Code location
+		// Fall back to default Claude Code location (~/.claude)
 		homeDir, err := os.UserHomeDir()
 		if err == nil {
-			configDir = filepath.Join(homeDir, ".config", "claude-code")
+			configDir = filepath.Join(homeDir, ".claude")
 		}
 	}
 	globalCommandsDir := filepath.Join(expandTilde(configDir), "commands")

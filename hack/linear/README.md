@@ -4,12 +4,27 @@ A command-line interface for interacting with Linear issue tracking.
 
 ## Features
 
-- List your active assigned issues (`list-issues`)
-- View issue details and comments (`get-issue`)
-- Add comments to issues (`add-comment`)
+### Issue Management
+- **Create issues** (`create-issue`) - Create new issues with full field support
+- **Update issues** (`update-issue`) - Update any issue field (title, description, status, priority, assignee, labels, project, parent)
+- **View issue details** (`get-issue`, `get-issue-v2`) - Show issue details, comments, and parent hierarchy
+- **List/filter issues** (`list-issues`, `my-issues`) - Filter by status, assignee, size with JSON/markdown output
+- **Add comments** (`add-comment`) - Add comments to issues
+- **Update status** (`update-status`) - Change issue workflow state
+- **Add links** (`add-link`) - Attach URLs to issues
+- **Assign to self** (`assign-to-me`) - Quick self-assignment
+
+### Workspace Discovery
+- **List teams** (`list-teams`) - Show all teams in workspace
+- **List projects** (`list-projects`) - Show projects (optionally filtered by team)
+- **List labels** (`list-labels`) - Show available labels (workspace or team-specific)
+- **List statuses** (`list-statuses`) - Show workflow states for a team
+
+### Additional Features
 - Download all images from issues (`fetch-images`)
 - Automatically detect issue IDs from git branch names
 - Shell completions for fish, zsh, and bash
+- JSON and markdown output formats
 - Cross-platform with support for multiple JavaScript runtimes
 - Smart handling of environment variables (only requires API key for operations)
 
@@ -30,17 +45,58 @@ A command-line interface for interacting with Linear issue tracking.
 ## Usage
 
 ```bash
-# List your assigned active issues (only shows issues not marked as done/canceled)
+# === Workspace Discovery ===
+
+# List all teams
+linear list-teams
+linear list-teams --output-format json
+
+# List projects (optionally filter by team)
+linear list-projects
+linear list-projects --team ENG
+
+# List labels
+linear list-labels
+linear list-labels --team ENG
+
+# List workflow statuses for a team
+linear list-statuses ENG
+
+# === Issue Management ===
+
+# Create a new issue
+linear create-issue --title "Fix login bug" --team ENG
+linear create-issue -t "Add dark mode" --team ENG -d "User requested dark mode support" \
+  --project "UI Improvements" --priority high --state "Backlog" \
+  --assignee me --labels "Feature,UI"
+
+# Update an existing issue
+linear update-issue ENG-123 --state "In Progress"
+linear update-issue ENG-123 --priority urgent --assignee "John Doe"
+linear update-issue ENG-123 --labels "Bug,Critical"  # Replaces all labels
+linear update-issue ENG-123 --labels none  # Clears all labels
+
+# List your assigned active issues
 linear list-issues
+linear list-issues --status "In Progress" --output-format json
 
 # View details of an issue
 linear get-issue ENG-123
 # Or if your git branch contains the issue ID (e.g., feature/ENG-123-something)
 linear get-issue
 
-# Add a comment to an issue (requires message as first parameter)
+# Add a comment to an issue
 linear add-comment "This is my comment" --issue-id ENG-123  # Explicit ID
 linear add-comment "This is my comment"  # Uses git branch auto-detection
+
+# Update issue status
+linear update-status ENG-123 "In Progress"
+
+# Add a link to an issue
+linear add-link ENG-123 "https://github.com/org/repo/pull/456" --title "PR #456"
+
+# Assign issue to yourself
+linear assign-to-me ENG-123
 
 # Download all images from an issue to local thoughts directory
 linear fetch-images ENG-123

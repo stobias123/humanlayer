@@ -1,148 +1,75 @@
 #!/bin/bash
 
 # create_worktree.sh - Create a new worktree for development work
-# Usage: ./create_worktree.sh [--no-thoughts] [worktree_name] [base_branch]
-# If no name provided, generates a unique human-readable one
-# If no base branch provided, uses current branch
+# Usage: ./create_worktree.sh SRC_PATH DST_PATH
 
-set -e  # Exit on any error
+set -e
 
-
-# Function to generate a unique worktree name
-generate_unique_name() {
-    local adjectives=("swift" "bright" "clever" "smooth" "quick" "clean" "sharp" "neat" "cool" "fast")
-    local nouns=("fix" "task" "work" "dev" "patch" "branch" "code" "build" "test" "run")
-
-    local adj=${adjectives[$RANDOM % ${#adjectives[@]}]}
-    local noun=${nouns[$RANDOM % ${#nouns[@]}]}
-    local timestamp=$(date +%H%M)
-
-    echo "${adj}_${noun}_${timestamp}"
-}
-
-# Parse flags
-INIT_THOUGHTS=true
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --no-thoughts)
-            INIT_THOUGHTS=false
-            shift
-            ;;
-        *)
-            break
-            ;;
-    esac
-done
-
-# Get worktree name from parameter or generate one
-WORKTREE_NAME=${1:-$(generate_unique_name)}
-
-# Get base branch from second parameter or use current branch
-BASE_BRANCH=${2:-$(git branch --show-current)}
-
-# Get base directory name (should be 'humanlayer')
-REPO_BASE_NAME=$(basename "$(pwd)")
-
-if [ ! -z "$HUMANLAYER_WORKTREE_OVERRIDE_BASE" ]; then
-    WORKTREE_DIR_NAME="${WORKTREE_NAME}"
-    WORKTREES_BASE="${HUMANLAYER_WORKTREE_OVERRIDE_BASE}/${REPO_BASE_NAME}"
-else
-    WORKTREE_DIR_NAME="${WORKTREE_NAME}"
-    WORKTREES_BASE="$HOME/wt/${REPO_BASE_NAME}"
-fi
-
-WORKTREE_PATH="${WORKTREES_BASE}/${WORKTREE_DIR_NAME}"
-
-echo "🌳 Creating worktree: ${WORKTREE_NAME}"
-echo "📁 Location: ${WORKTREE_PATH}"
-
-# Check if worktrees base directory exists
-if [ ! -d "$WORKTREES_BASE" ]; then
-    echo "❌ Error: Directory $WORKTREES_BASE does not exist."
-    echo "   Please create it first: mkdir -p $WORKTREES_BASE"
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 SRC_PATH DST_PATH"
+    echo "  SRC_PATH: Path to the source repository"
+    echo "  DST_PATH: Path where the worktree will be created"
     exit 1
 fi
 
-# Check if worktree already exists
-if [ -d "$WORKTREE_PATH" ]; then
-    echo "❌ Error: Worktree directory already exists: $WORKTREE_PATH"
+SRC_PATH="$1"
+DST_PATH="$2"
+BRANCH_NAME=$(basename "$DST_PATH")
+
+# Validate source is a git repo
+if [ ! -d "$SRC_PATH/.git" ] && [ ! -f "$SRC_PATH/.git" ]; then
+    echo "❌ Error: $SRC_PATH is not a git repository"
     exit 1
 fi
 
-# Display base branch info
-echo "🔀 Creating from branch: ${BASE_BRANCH}"
+# Check if destination already exists
+if [ -d "$DST_PATH" ]; then
+    echo "❌ Error: $DST_PATH already exists"
+    exit 1
+fi
 
-# Create worktree (creates branch if it doesn't exist)
-if git show-ref --verify --quiet "refs/heads/${WORKTREE_NAME}"; then
-    echo "📋 Using existing branch: ${WORKTREE_NAME}"
-    git worktree add "$WORKTREE_PATH" "$WORKTREE_NAME"
+# Create parent directory if needed
+mkdir -p "$(dirname "$DST_PATH")"
+
+echo "🌳 Creating worktree: $BRANCH_NAME"
+echo "📁 From: $SRC_PATH"
+echo "📁 To: $DST_PATH"
+
+cd "$SRC_PATH"
+
+# Create worktree with new branch
+if git show-ref --verify --quiet "refs/heads/${BRANCH_NAME}"; then
+    echo "📋 Using existing branch: ${BRANCH_NAME}"
+    git worktree add "$DST_PATH" "$BRANCH_NAME"
 else
-    echo "🆕 Creating new branch: ${WORKTREE_NAME}"
-    git worktree add -b "$WORKTREE_NAME" "$WORKTREE_PATH" "$BASE_BRANCH"
+    echo "🆕 Creating new branch: ${BRANCH_NAME}"
+    git worktree add -b "$BRANCH_NAME" "$DST_PATH"
 fi
 
 # Copy .claude directory if it exists
 if [ -d ".claude" ]; then
     echo "📋 Copying .claude directory..."
-    cp -r .claude "$WORKTREE_PATH/"
+    cp -r .claude "$DST_PATH/"
 fi
 
-# Change to worktree directory
-cd "$WORKTREE_PATH"
+cd "$DST_PATH"
 
-echo "🔧 Setting up worktree dependencies..."
-if ! make setup; then
-    echo "❌ Setup failed. Cleaning up worktree..."
-    cd - > /dev/null
-    git worktree remove --force "$WORKTREE_PATH"
-    git branch -D "$WORKTREE_NAME" 2>/dev/null || true
-    echo "❌ Not allowed to create worktree from a branch that isn't passing setup."
-    exit 1
-fi
+REPO_NAME=$(git -C "$SRC_PATH" remote get-url origin | sed 's/.*\///' | sed 's/\.git$//')
+hlyr thoughts init --force --directory "$REPO_NAME"
+hlyr thoughts sync
 
-# echo "🧪 Verifying worktree with checks and tests..."
-# temp_output=$(mktemp)
-# if make check test > "$temp_output" 2>&1; then
-#     rm "$temp_output"
-#     echo "✅ All checks and tests pass!"
-# else
-#     cat "$temp_output"
-#     rm "$temp_output"
-#     echo "❌ Checks and tests failed. Cleaning up worktree..."
-#     cd - > /dev/null
-#     git worktree remove --force "$WORKTREE_PATH"
-#     git branch -D "$WORKTREE_NAME" 2>/dev/null || true
-#     echo "❌ Not allowed to create worktree from a branch that isn't passing checks and tests."
-#     exit 1
-# fi
-
-# Initialize thoughts (non-interactive mode with hardcoded directory)
-if [ "$INIT_THOUGHTS" = true ]; then
-    echo "🧠 Initializing thoughts..."
-    cd "$WORKTREE_PATH"
-    if humanlayer thoughts init --directory humanlayer > /dev/null 2>&1; then
-        echo "✅ Thoughts initialized!"
-        # Run sync to create searchable directory
-        if humanlayer thoughts sync > /dev/null 2>&1; then
-            echo "✅ Thoughts searchable index created!"
-        else
-            echo "⚠️  Could not create searchable index. Run 'humanlayer thoughts sync' manually."
-        fi
-    else
-        echo "⚠️  Could not initialize thoughts automatically. Run 'humanlayer thoughts init' manually."
-    fi
-fi
-
-# Return to original directory
-cd - > /dev/null
+#echo "🔧 Running make setup..."
+#if ! make setup; then
+#    echo "❌ Setup failed. Cleaning up..."
+#    cd "$SRC_PATH"
+#    git worktree remove --force "$DST_PATH"
+#    git branch -D "$BRANCH_NAME" 2>/dev/null || true
+#    exit 1
+#fi
 
 echo "✅ Worktree created successfully!"
-echo "📁 Path: ${WORKTREE_PATH}"
-echo "🔀 Branch: ${WORKTREE_NAME}"
+echo "📁 Path: $DST_PATH"
+echo "🔀 Branch: $BRANCH_NAME"
 echo ""
-echo "To work in this worktree:"
-echo "  cd ${WORKTREE_PATH}"
-echo ""
-echo "To remove this worktree later:"
-echo "  git worktree remove ${WORKTREE_PATH}"
-echo "  git branch -D ${WORKTREE_NAME}"
+echo "To remove later:"
+echo "  git worktree remove $DST_PATH && git branch -D $BRANCH_NAME"

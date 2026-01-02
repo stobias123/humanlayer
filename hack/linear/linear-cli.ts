@@ -87,8 +87,9 @@ function getThoughtsImagesPath(issueId: string): string {
 let linear: LinearClient | undefined;
 
 // Only require API key for commands that need it, not for help or completions
-const needsAuth = process.argv.length > 2 && 
-  !['--help', '-h', '--version', '-v', 'completion', 'help'].includes(process.argv[2]);
+const needsAuth = process.argv.length > 2 &&
+  !['--help', '-h', '--version', '-v', 'completion', 'help'].includes(process.argv[2]) &&
+  !process.argv.includes('--help') && !process.argv.includes('-h');
 
 if (needsAuth) {
   if (!process.env.LINEAR_API_KEY) {
@@ -319,7 +320,7 @@ async function addComment(message: string, options: { issueId?: string }) {
     const issueId = await resolveIssueId(options.issueId);
 
     // Create comment
-    const result = await linear.commentCreate({
+    const result = await linear.createComment({
       issueId,
       body: message,
     });
@@ -382,7 +383,7 @@ async function updateStatus(issueId: string, statusName: string): Promise<void> 
     }
 
     // Update the issue with the new state
-    const result = await linear.issueUpdate(normalizedId, {
+    const result = await linear.updateIssue(normalizedId, {
       stateId: targetState.id
     });
 
@@ -434,7 +435,7 @@ async function addLink(issueId: string, url: string, options: { title?: string }
     }
 
     // Create the attachment (link)
-    const result = await linear.attachmentCreate({
+    const result = await linear.createAttachment({
       issueId: issue.id,
       url: url,
       title: options.title || url,
@@ -474,7 +475,7 @@ async function assignToMe(issueId?: string): Promise<void> {
     }
 
     // Update the issue with the authenticated user as assignee
-    const result = await linear.issueUpdate(resolvedId, {
+    const result = await linear.updateIssue(resolvedId, {
       assigneeId: viewer.id
     });
 
@@ -839,11 +840,649 @@ async function getIssueV2(issueId: string, options: {
   }
 }
 
+async function listTeams(options: { outputFormat?: string }) {
+  try {
+    if (!linear) {
+      throw new Error("Linear client not initialized. Check your API key.");
+    }
+
+    const outputFormat = options.outputFormat || "markdown";
+    const useJson = outputFormat === "json" || outputFormat === "rich-json";
+
+    const teams = await linear.teams();
+
+    if (!teams.nodes.length) {
+      if (useJson) {
+        console.log(JSON.stringify([], null, outputFormat === "rich-json" ? 2 : undefined));
+      } else {
+        console.log(chalk.yellow("No teams found."));
+      }
+      return;
+    }
+
+    if (useJson) {
+      const teamsData = teams.nodes.map(team => ({
+        id: team.id,
+        key: team.key,
+        name: team.name,
+        description: team.description || null
+      }));
+      console.log(JSON.stringify(teamsData, null, outputFormat === "rich-json" ? 2 : undefined));
+    } else {
+      console.log(chalk.bold("\nTeams:"));
+      for (const team of teams.nodes) {
+        console.log(`  [${chalk.cyan(team.key)}] ${team.name} (${chalk.dim(team.id)})`);
+        if (team.description) {
+          console.log(chalk.dim(`      ${team.description}`));
+        }
+      }
+    }
+  } catch (error) {
+    console.error(chalk.red("Error fetching teams:"), error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
+async function listProjects(options: { team?: string, outputFormat?: string }) {
+  try {
+    if (!linear) {
+      throw new Error("Linear client not initialized. Check your API key.");
+    }
+
+    const outputFormat = options.outputFormat || "markdown";
+    const useJson = outputFormat === "json" || outputFormat === "rich-json";
+
+    let projects;
+    if (options.team) {
+      // Find team first
+      const teams = await linear.teams();
+      const team = teams.nodes.find(t =>
+        t.key.toLowerCase() === options.team!.toLowerCase() ||
+        t.name.toLowerCase() === options.team!.toLowerCase() ||
+        t.id === options.team
+      );
+
+      if (!team) {
+        console.error(chalk.red(`Team "${options.team}" not found.`));
+        process.exit(1);
+      }
+
+      projects = await team.projects();
+    } else {
+      projects = await linear.projects();
+    }
+
+    if (!projects.nodes.length) {
+      if (useJson) {
+        console.log(JSON.stringify([], null, outputFormat === "rich-json" ? 2 : undefined));
+      } else {
+        console.log(chalk.yellow("No projects found."));
+      }
+      return;
+    }
+
+    if (useJson) {
+      const projectsData = projects.nodes.map(project => ({
+        id: project.id,
+        name: project.name,
+        description: project.description || null,
+        state: project.state,
+        url: project.url
+      }));
+      console.log(JSON.stringify(projectsData, null, outputFormat === "rich-json" ? 2 : undefined));
+    } else {
+      console.log(chalk.bold("\nProjects:"));
+      for (const project of projects.nodes) {
+        console.log(`  ${project.name} (${chalk.dim(project.id)})`);
+        if (project.description) {
+          console.log(chalk.dim(`      ${project.description.substring(0, 100)}${project.description.length > 100 ? '...' : ''}`));
+        }
+      }
+    }
+  } catch (error) {
+    console.error(chalk.red("Error fetching projects:"), error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
+async function listLabels(options: { team?: string, outputFormat?: string }) {
+  try {
+    if (!linear) {
+      throw new Error("Linear client not initialized. Check your API key.");
+    }
+
+    const outputFormat = options.outputFormat || "markdown";
+    const useJson = outputFormat === "json" || outputFormat === "rich-json";
+
+    let labels;
+    if (options.team) {
+      // Find team first
+      const teams = await linear.teams();
+      const team = teams.nodes.find(t =>
+        t.key.toLowerCase() === options.team!.toLowerCase() ||
+        t.name.toLowerCase() === options.team!.toLowerCase() ||
+        t.id === options.team
+      );
+
+      if (!team) {
+        console.error(chalk.red(`Team "${options.team}" not found.`));
+        process.exit(1);
+      }
+
+      labels = await team.labels();
+    } else {
+      labels = await linear.issueLabels();
+    }
+
+    if (!labels.nodes.length) {
+      if (useJson) {
+        console.log(JSON.stringify([], null, outputFormat === "rich-json" ? 2 : undefined));
+      } else {
+        console.log(chalk.yellow("No labels found."));
+      }
+      return;
+    }
+
+    if (useJson) {
+      const labelsData = labels.nodes.map(label => ({
+        id: label.id,
+        name: label.name,
+        color: label.color,
+        description: label.description || null
+      }));
+      console.log(JSON.stringify(labelsData, null, outputFormat === "rich-json" ? 2 : undefined));
+    } else {
+      console.log(chalk.bold("\nLabels:"));
+      for (const label of labels.nodes) {
+        const colorBox = label.color ? chalk.hex(label.color)("●") : "○";
+        console.log(`  ${colorBox} ${label.name} (${chalk.dim(label.id)})`);
+        if (label.description) {
+          console.log(chalk.dim(`      ${label.description}`));
+        }
+      }
+    }
+  } catch (error) {
+    console.error(chalk.red("Error fetching labels:"), error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
+async function listStatuses(teamId: string, options: { outputFormat?: string }) {
+  try {
+    if (!linear) {
+      throw new Error("Linear client not initialized. Check your API key.");
+    }
+
+    const outputFormat = options.outputFormat || "markdown";
+    const useJson = outputFormat === "json" || outputFormat === "rich-json";
+
+    // Find team
+    const teams = await linear.teams();
+    const team = teams.nodes.find(t =>
+      t.key.toLowerCase() === teamId.toLowerCase() ||
+      t.name.toLowerCase() === teamId.toLowerCase() ||
+      t.id === teamId
+    );
+
+    if (!team) {
+      console.error(chalk.red(`Team "${teamId}" not found.`));
+      process.exit(1);
+    }
+
+    const states = await team.states();
+
+    if (!states.nodes.length) {
+      if (useJson) {
+        console.log(JSON.stringify([], null, outputFormat === "rich-json" ? 2 : undefined));
+      } else {
+        console.log(chalk.yellow("No statuses found."));
+      }
+      return;
+    }
+
+    // Sort by position
+    const sortedStates = [...states.nodes].sort((a, b) => a.position - b.position);
+
+    if (useJson) {
+      const statesData = sortedStates.map(state => ({
+        id: state.id,
+        name: state.name,
+        type: state.type,
+        color: state.color,
+        position: state.position
+      }));
+      console.log(JSON.stringify(statesData, null, outputFormat === "rich-json" ? 2 : undefined));
+    } else {
+      console.log(chalk.bold(`\nStatuses for ${team.name}:`));
+      for (const state of sortedStates) {
+        const colorBox = state.color ? chalk.hex(state.color)("●") : "○";
+        console.log(`  ${colorBox} ${state.name} [${chalk.dim(state.type)}] (${chalk.dim(state.id)})`);
+      }
+    }
+  } catch (error) {
+    console.error(chalk.red("Error fetching statuses:"), error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
+async function createIssue(options: {
+  title: string,
+  team: string,
+  description?: string,
+  project?: string,
+  priority?: string,
+  state?: string,
+  assignee?: string,
+  labels?: string,
+  parentId?: string,
+  outputFormat?: string
+}) {
+  try {
+    if (!linear) {
+      throw new Error("Linear client not initialized. Check your API key.");
+    }
+
+    const outputFormat = options.outputFormat || "markdown";
+    const useJson = outputFormat === "json" || outputFormat === "rich-json";
+
+    // Find team
+    const teams = await linear.teams();
+    const team = teams.nodes.find(t =>
+      t.key.toLowerCase() === options.team.toLowerCase() ||
+      t.name.toLowerCase() === options.team.toLowerCase() ||
+      t.id === options.team
+    );
+
+    if (!team) {
+      console.error(chalk.red(`Team "${options.team}" not found.`));
+      console.log(chalk.yellow("\nAvailable teams:"));
+      teams.nodes.forEach(t => console.log(`  [${t.key}] ${t.name}`));
+      process.exit(1);
+    }
+
+    // Build issue input
+    const issueInput: any = {
+      title: options.title,
+      teamId: team.id,
+    };
+
+    if (options.description) {
+      issueInput.description = options.description;
+    }
+
+    // Find project if specified
+    if (options.project) {
+      const projects = await team.projects();
+      const project = projects.nodes.find(p =>
+        p.name.toLowerCase() === options.project!.toLowerCase() ||
+        p.id === options.project
+      );
+
+      if (!project) {
+        console.error(chalk.red(`Project "${options.project}" not found.`));
+        console.log(chalk.yellow("\nAvailable projects:"));
+        projects.nodes.forEach(p => console.log(`  ${p.name}`));
+        process.exit(1);
+      }
+      issueInput.projectId = project.id;
+    }
+
+    // Set priority if specified (0=none, 1=urgent, 2=high, 3=normal, 4=low)
+    if (options.priority) {
+      const priorityMap: Record<string, number> = {
+        'none': 0, '0': 0,
+        'urgent': 1, '1': 1,
+        'high': 2, '2': 2,
+        'normal': 3, 'medium': 3, '3': 3,
+        'low': 4, '4': 4
+      };
+      const priority = priorityMap[options.priority.toLowerCase()];
+      if (priority === undefined) {
+        console.error(chalk.red(`Invalid priority "${options.priority}". Use: none, urgent, high, normal/medium, low (or 0-4)`));
+        process.exit(1);
+      }
+      issueInput.priority = priority;
+    }
+
+    // Find state if specified
+    if (options.state) {
+      const states = await team.states();
+      const state = states.nodes.find(s =>
+        s.name.toLowerCase() === options.state!.toLowerCase() ||
+        s.id === options.state
+      );
+
+      if (!state) {
+        console.error(chalk.red(`State "${options.state}" not found.`));
+        console.log(chalk.yellow("\nAvailable states:"));
+        states.nodes.forEach(s => console.log(`  ${s.name}`));
+        process.exit(1);
+      }
+      issueInput.stateId = state.id;
+    }
+
+    // Find assignee if specified
+    if (options.assignee) {
+      let assigneeId: string;
+
+      if (options.assignee.toLowerCase() === 'me') {
+        const viewer = await linear.viewer;
+        assigneeId = viewer.id;
+      } else {
+        const users = await linear.users();
+        const user = users.nodes.find(u =>
+          u.name.toLowerCase() === options.assignee!.toLowerCase() ||
+          u.email.toLowerCase() === options.assignee!.toLowerCase() ||
+          u.displayName.toLowerCase() === options.assignee!.toLowerCase() ||
+          u.id === options.assignee
+        );
+
+        if (!user) {
+          console.error(chalk.red(`User "${options.assignee}" not found.`));
+          process.exit(1);
+        }
+        assigneeId = user.id;
+      }
+      issueInput.assigneeId = assigneeId;
+    }
+
+    // Handle labels (comma-separated)
+    if (options.labels) {
+      const labelNames = options.labels.split(',').map(l => l.trim());
+      const allLabels = await linear.issueLabels();
+      const teamLabels = await team.labels();
+      const combinedLabels = [...allLabels.nodes, ...teamLabels.nodes];
+
+      const labelIds: string[] = [];
+      for (const labelName of labelNames) {
+        const label = combinedLabels.find(l =>
+          l.name.toLowerCase() === labelName.toLowerCase() ||
+          l.id === labelName
+        );
+
+        if (!label) {
+          console.error(chalk.red(`Label "${labelName}" not found.`));
+          process.exit(1);
+        }
+        if (!labelIds.includes(label.id)) {
+          labelIds.push(label.id);
+        }
+      }
+      issueInput.labelIds = labelIds;
+    }
+
+    // Set parent if specified
+    if (options.parentId) {
+      // Validate parent issue exists
+      const parentIssue = await linear.issue(options.parentId.toUpperCase());
+      if (!parentIssue) {
+        console.error(chalk.red(`Parent issue "${options.parentId}" not found.`));
+        process.exit(1);
+      }
+      issueInput.parentId = parentIssue.id;
+    }
+
+    // Create the issue
+    const result = await linear.createIssue(issueInput);
+
+    if (!result.success) {
+      console.error(chalk.red("Failed to create issue."));
+      process.exit(1);
+    }
+
+    const issue = await result.issue;
+    if (!issue) {
+      console.error(chalk.red("Issue created but could not fetch details."));
+      process.exit(1);
+    }
+
+    if (useJson) {
+      const issueData = {
+        id: issue.id,
+        identifier: issue.identifier,
+        title: issue.title,
+        url: issue.url,
+        branchName: issue.branchName
+      };
+      console.log(JSON.stringify(issueData, null, outputFormat === "rich-json" ? 2 : undefined));
+    } else {
+      console.log(chalk.green(`✓ Created issue [${issue.identifier}] ${issue.title}`));
+      console.log(chalk.dim(`  URL: ${issue.url}`));
+      if (issue.branchName) {
+        console.log(chalk.dim(`  Branch: ${issue.branchName}`));
+      }
+    }
+  } catch (error) {
+    console.error(chalk.red("Error creating issue:"), error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
+async function updateIssue(issueId: string, options: {
+  title?: string,
+  description?: string,
+  project?: string,
+  priority?: string,
+  state?: string,
+  assignee?: string,
+  labels?: string,
+  parentId?: string,
+  outputFormat?: string
+}) {
+  try {
+    if (!linear) {
+      throw new Error("Linear client not initialized. Check your API key.");
+    }
+
+    // Validate issue ID format
+    if (!issueId || !/^[A-Za-z0-9]+-\d+$/i.test(issueId)) {
+      console.error(chalk.red("Error: Invalid issue ID format. Expected format: ENG-123 or B2BPROD-206"));
+      process.exit(1);
+    }
+
+    const normalizedId = issueId.toUpperCase();
+    const outputFormat = options.outputFormat || "markdown";
+    const useJson = outputFormat === "json" || outputFormat === "rich-json";
+
+    // Fetch the issue first
+    const issue = await linear.issue(normalizedId);
+    if (!issue) {
+      console.error(chalk.red(`Issue ${normalizedId} not found.`));
+      process.exit(1);
+    }
+
+    const team = await issue.team;
+    if (!team) {
+      console.error(chalk.red(`Could not determine team for issue ${normalizedId}.`));
+      process.exit(1);
+    }
+
+    // Build update input
+    const updateInput: any = {};
+
+    if (options.title) {
+      updateInput.title = options.title;
+    }
+
+    if (options.description) {
+      updateInput.description = options.description;
+    }
+
+    // Find project if specified
+    if (options.project) {
+      const projects = await team.projects();
+      const project = projects.nodes.find(p =>
+        p.name.toLowerCase() === options.project!.toLowerCase() ||
+        p.id === options.project
+      );
+
+      if (!project) {
+        console.error(chalk.red(`Project "${options.project}" not found.`));
+        console.log(chalk.yellow("\nAvailable projects:"));
+        projects.nodes.forEach(p => console.log(`  ${p.name}`));
+        process.exit(1);
+      }
+      updateInput.projectId = project.id;
+    }
+
+    // Set priority if specified
+    if (options.priority) {
+      const priorityMap: Record<string, number> = {
+        'none': 0, '0': 0,
+        'urgent': 1, '1': 1,
+        'high': 2, '2': 2,
+        'normal': 3, 'medium': 3, '3': 3,
+        'low': 4, '4': 4
+      };
+      const priority = priorityMap[options.priority.toLowerCase()];
+      if (priority === undefined) {
+        console.error(chalk.red(`Invalid priority "${options.priority}". Use: none, urgent, high, normal/medium, low (or 0-4)`));
+        process.exit(1);
+      }
+      updateInput.priority = priority;
+    }
+
+    // Find state if specified
+    if (options.state) {
+      const states = await team.states();
+      const state = states.nodes.find(s =>
+        s.name.toLowerCase() === options.state!.toLowerCase() ||
+        s.id === options.state
+      );
+
+      if (!state) {
+        console.error(chalk.red(`State "${options.state}" not found.`));
+        console.log(chalk.yellow("\nAvailable states:"));
+        states.nodes.forEach(s => console.log(`  ${s.name}`));
+        process.exit(1);
+      }
+      updateInput.stateId = state.id;
+    }
+
+    // Find assignee if specified
+    if (options.assignee) {
+      let assigneeId: string | null;
+
+      if (options.assignee.toLowerCase() === 'none' || options.assignee === '') {
+        assigneeId = null;
+      } else if (options.assignee.toLowerCase() === 'me') {
+        const viewer = await linear.viewer;
+        assigneeId = viewer.id;
+      } else {
+        const users = await linear.users();
+        const user = users.nodes.find(u =>
+          u.name.toLowerCase() === options.assignee!.toLowerCase() ||
+          u.email.toLowerCase() === options.assignee!.toLowerCase() ||
+          u.displayName.toLowerCase() === options.assignee!.toLowerCase() ||
+          u.id === options.assignee
+        );
+
+        if (!user) {
+          console.error(chalk.red(`User "${options.assignee}" not found.`));
+          process.exit(1);
+        }
+        assigneeId = user.id;
+      }
+      updateInput.assigneeId = assigneeId;
+    }
+
+    // Handle labels (comma-separated) - replaces all labels
+    if (options.labels !== undefined) {
+      if (options.labels === '' || options.labels.toLowerCase() === 'none') {
+        updateInput.labelIds = [];
+      } else {
+        const labelNames = options.labels.split(',').map(l => l.trim());
+        const allLabels = await linear.issueLabels();
+        const teamLabels = await team.labels();
+        const combinedLabels = [...allLabels.nodes, ...teamLabels.nodes];
+
+        const labelIds: string[] = [];
+        for (const labelName of labelNames) {
+          const label = combinedLabels.find(l =>
+            l.name.toLowerCase() === labelName.toLowerCase() ||
+            l.id === labelName
+          );
+
+          if (!label) {
+            console.error(chalk.red(`Label "${labelName}" not found.`));
+            process.exit(1);
+          }
+          if (!labelIds.includes(label.id)) {
+            labelIds.push(label.id);
+          }
+        }
+        updateInput.labelIds = labelIds;
+      }
+    }
+
+    // Set parent if specified
+    if (options.parentId !== undefined) {
+      if (options.parentId === '' || options.parentId.toLowerCase() === 'none') {
+        updateInput.parentId = null;
+      } else {
+        const parentIssue = await linear.issue(options.parentId.toUpperCase());
+        if (!parentIssue) {
+          console.error(chalk.red(`Parent issue "${options.parentId}" not found.`));
+          process.exit(1);
+        }
+        updateInput.parentId = parentIssue.id;
+      }
+    }
+
+    // Check if there's anything to update
+    if (Object.keys(updateInput).length === 0) {
+      console.error(chalk.red("No update options specified. Use --help to see available options."));
+      process.exit(1);
+    }
+
+    // Update the issue
+    const result = await linear.updateIssue(normalizedId, updateInput);
+
+    if (!result.success) {
+      console.error(chalk.red(`Failed to update issue ${normalizedId}.`));
+      process.exit(1);
+    }
+
+    const updatedIssue = await result.issue;
+
+    if (useJson) {
+      const issueData = {
+        id: updatedIssue?.id,
+        identifier: updatedIssue?.identifier,
+        title: updatedIssue?.title,
+        url: updatedIssue?.url
+      };
+      console.log(JSON.stringify(issueData, null, outputFormat === "rich-json" ? 2 : undefined));
+    } else {
+      console.log(chalk.green(`✓ Updated issue ${normalizedId}`));
+
+      // Show what was updated
+      const updates: string[] = [];
+      if (options.title) updates.push(`title`);
+      if (options.description) updates.push(`description`);
+      if (options.project) updates.push(`project`);
+      if (options.priority) updates.push(`priority`);
+      if (options.state) updates.push(`state`);
+      if (options.assignee) updates.push(`assignee`);
+      if (options.labels !== undefined) updates.push(`labels`);
+      if (options.parentId !== undefined) updates.push(`parent`);
+
+      if (updates.length > 0) {
+        console.log(chalk.dim(`  Updated: ${updates.join(', ')}`));
+      }
+    }
+  } catch (error) {
+    console.error(chalk.red("Error updating issue:"), error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
 async function listIssuesV2(options: {
   maxIssues?: string,
   status?: string,
   size?: string,
   assignee?: string,
+  project?: string,
   sortAsc?: boolean,
   outputFormat?: string,
   fields?: string,
@@ -899,6 +1538,29 @@ async function listIssuesV2(options: {
 
       filterConditions.push({
         assignee: { id: { eq: matchingUser.id } }
+      });
+    }
+
+    // Handle project filter
+    if (options.project) {
+      const projectValue = options.project.trim();
+
+      // Fetch all projects to find the matching one
+      const projects = await linear.projects();
+      const matchingProject = projects.nodes.find(project =>
+        project.name.toLowerCase() === projectValue.toLowerCase() ||
+        project.id === projectValue
+      );
+
+      if (!matchingProject) {
+        console.error(chalk.red(`Error: No project found matching "${projectValue}"`));
+        console.log(chalk.yellow("\nAvailable projects:"));
+        projects.nodes.forEach(p => console.log(`  ${p.name}`));
+        process.exit(1);
+      }
+
+      filterConditions.push({
+        project: { id: { eq: matchingProject.id } }
       });
     }
 
@@ -1161,6 +1823,7 @@ program
   .description("List and filter issues with advanced options")
   .option("--max-issues <number>", "Maximum number of issues to fetch", "10")
   .option("--assignee <assignee>", "Filter by assignee (name, email, or display name)")
+  .option("--project <project>", "Filter by project (name or ID)")
   .option("--status <statuses>", "Filter by status (comma-separated, e.g. 'research needed,in review')")
   .option("--size <sizes>", "Filter by issue size (comma-separated numbers, e.g. '1,2')")
   .option("--sort-asc", "Sort by updatedAt in ascending order (default is descending)")
@@ -1168,6 +1831,61 @@ program
   .option("--fields <fields>", "Comma-separated fields to include: identifier,title,branch,assignee,description,comments", "identifier,title,branch")
   .option("--ids-only", "Output only issue identifiers (incompatible with --fields)")
   .action(listIssuesV2);
+
+program
+  .command("list-teams")
+  .description("List all teams in the workspace")
+  .option("--output-format <format>", "Output format: markdown, json (compact), or rich-json (pretty)", "markdown")
+  .action(listTeams);
+
+program
+  .command("list-projects")
+  .description("List projects in the workspace")
+  .option("--team <team>", "Filter by team (name, key, or ID)")
+  .option("--output-format <format>", "Output format: markdown, json (compact), or rich-json (pretty)", "markdown")
+  .action(listProjects);
+
+program
+  .command("list-labels")
+  .description("List issue labels in the workspace")
+  .option("--team <team>", "Filter by team (name, key, or ID)")
+  .option("--output-format <format>", "Output format: markdown, json (compact), or rich-json (pretty)", "markdown")
+  .action(listLabels);
+
+program
+  .command("list-statuses <team>")
+  .description("List workflow statuses for a team")
+  .option("--output-format <format>", "Output format: markdown, json (compact), or rich-json (pretty)", "markdown")
+  .action(listStatuses);
+
+program
+  .command("create-issue")
+  .description("Create a new Linear issue")
+  .requiredOption("-t, --title <title>", "Issue title (required)")
+  .requiredOption("--team <team>", "Team name, key, or ID (required)")
+  .option("-d, --description <description>", "Issue description (markdown)")
+  .option("-p, --project <project>", "Project name or ID")
+  .option("--priority <priority>", "Priority: none, urgent, high, normal/medium, low (or 0-4)")
+  .option("-s, --state <state>", "Initial state/status name or ID")
+  .option("-a, --assignee <assignee>", "Assignee (name, email, or 'me')")
+  .option("-l, --labels <labels>", "Comma-separated label names or IDs")
+  .option("--parent-id <parentId>", "Parent issue ID for sub-issues")
+  .option("--output-format <format>", "Output format: markdown, json (compact), or rich-json (pretty)", "markdown")
+  .action(createIssue);
+
+program
+  .command("update-issue <id>")
+  .description("Update an existing Linear issue")
+  .option("-t, --title <title>", "New issue title")
+  .option("-d, --description <description>", "New issue description (markdown)")
+  .option("-p, --project <project>", "Project name or ID")
+  .option("--priority <priority>", "Priority: none, urgent, high, normal/medium, low (or 0-4)")
+  .option("-s, --state <state>", "State/status name or ID")
+  .option("-a, --assignee <assignee>", "Assignee (name, email, 'me', or 'none' to unassign)")
+  .option("-l, --labels <labels>", "Comma-separated label names (replaces all labels, use 'none' to clear)")
+  .option("--parent-id <parentId>", "Parent issue ID (or 'none' to remove parent)")
+  .option("--output-format <format>", "Output format: markdown, json (compact), or rich-json (pretty)", "markdown")
+  .action(updateIssue);
 
 // Add completion generation
 program
@@ -1177,7 +1895,7 @@ program
   .option("--zsh", "Generate Zsh completion script")
   .option("--fish", "Generate Fish completion script")
   .action((options) => {
-    const commands = ["my-issues", "list-issues", "get-issue", "get-issue-v2", "add-comment", "fetch-images", "update-status", "add-link", "assign-to-me", "completion", "help"];
+    const commands = ["my-issues", "list-issues", "list-teams", "list-projects", "list-labels", "list-statuses", "get-issue", "get-issue-v2", "add-comment", "fetch-images", "update-status", "add-link", "assign-to-me", "create-issue", "update-issue", "completion", "help"];
 
     if (options.bash) {
       // Basic bash completion
@@ -1210,6 +1928,10 @@ _linear() {
   commands=(
     'my-issues:List your assigned issues'
     'list-issues:List and filter issues with advanced options'
+    'list-teams:List all teams in the workspace'
+    'list-projects:List projects in the workspace'
+    'list-labels:List issue labels in the workspace'
+    'list-statuses:List workflow statuses for a team'
     'get-issue:Show issue details and comments'
     'get-issue-v2:Get a single issue with the same output format as list-issues'
     'add-comment:Add a comment to an issue'
@@ -1217,6 +1939,8 @@ _linear() {
     'update-status:Update the status of a Linear issue'
     'add-link:Add a link/attachment to a Linear issue'
     'assign-to-me:Assign an issue to yourself'
+    'create-issue:Create a new Linear issue'
+    'update-issue:Update an existing Linear issue'
     'completion:Generate shell completion script'
     'help:Display help for command'
   )
@@ -1244,6 +1968,7 @@ _linear() {
         _arguments \\
           '--max-issues[Maximum number of issues to fetch]:number:' \\
           '--assignee[Filter by assignee]:assignee:' \\
+          '--project[Filter by project]:project:' \\
           '--status[Filter by status]:statuses:' \\
           '--size[Filter by issue size]:sizes:' \\
           '--sort-asc[Sort by updatedAt in ascending order]' \\
@@ -1265,6 +1990,10 @@ complete -c linear -f
 # Commands
 complete -c linear -n "__fish_use_subcommand" -a "my-issues" -d "List your assigned issues"
 complete -c linear -n "__fish_use_subcommand" -a "list-issues" -d "List and filter issues with advanced options"
+complete -c linear -n "__fish_use_subcommand" -a "list-teams" -d "List all teams in the workspace"
+complete -c linear -n "__fish_use_subcommand" -a "list-projects" -d "List projects in the workspace"
+complete -c linear -n "__fish_use_subcommand" -a "list-labels" -d "List issue labels in the workspace"
+complete -c linear -n "__fish_use_subcommand" -a "list-statuses" -d "List workflow statuses for a team"
 complete -c linear -n "__fish_use_subcommand" -a "get-issue" -d "Show issue details and comments"
 complete -c linear -n "__fish_use_subcommand" -a "get-issue-v2" -d "Get a single issue with the same output format as list-issues"
 complete -c linear -n "__fish_use_subcommand" -a "add-comment" -d "Add a comment to an issue"
@@ -1272,6 +2001,8 @@ complete -c linear -n "__fish_use_subcommand" -a "fetch-images" -d "Download all
 complete -c linear -n "__fish_use_subcommand" -a "update-status" -d "Update the status of a Linear issue"
 complete -c linear -n "__fish_use_subcommand" -a "add-link" -d "Add a link/attachment to a Linear issue"
 complete -c linear -n "__fish_use_subcommand" -a "assign-to-me" -d "Assign an issue to yourself"
+complete -c linear -n "__fish_use_subcommand" -a "create-issue" -d "Create a new Linear issue"
+complete -c linear -n "__fish_use_subcommand" -a "update-issue" -d "Update an existing Linear issue"
 complete -c linear -n "__fish_use_subcommand" -a "completion" -d "Generate shell completion script"
 complete -c linear -n "__fish_use_subcommand" -a "help" -d "Display help for command"
 
@@ -1288,12 +2019,40 @@ complete -c linear -n "__fish_seen_subcommand_from get-issue-v2" -l fields -d "F
 # Options for list-issues
 complete -c linear -n "__fish_seen_subcommand_from list-issues" -l max-issues -d "Maximum number of issues to fetch"
 complete -c linear -n "__fish_seen_subcommand_from list-issues" -l assignee -d "Filter by assignee (name, email, or display name)"
+complete -c linear -n "__fish_seen_subcommand_from list-issues" -l project -d "Filter by project (name or ID)"
 complete -c linear -n "__fish_seen_subcommand_from list-issues" -l status -d "Filter by status (comma-separated)"
 complete -c linear -n "__fish_seen_subcommand_from list-issues" -l size -d "Filter by issue size (comma-separated)"
 complete -c linear -n "__fish_seen_subcommand_from list-issues" -l sort-asc -d "Sort by updatedAt in ascending order"
 complete -c linear -n "__fish_seen_subcommand_from list-issues" -l output-format -d "Output format" -a "markdown json rich-json"
 complete -c linear -n "__fish_seen_subcommand_from list-issues" -l fields -d "Fields to include (comma-separated)"
 complete -c linear -n "__fish_seen_subcommand_from list-issues" -l ids-only -d "Output only issue identifiers"
+
+# Options for list-teams, list-projects, list-labels, list-statuses
+complete -c linear -n "__fish_seen_subcommand_from list-teams list-projects list-labels list-statuses" -l output-format -d "Output format" -a "markdown json rich-json"
+complete -c linear -n "__fish_seen_subcommand_from list-projects list-labels" -l team -d "Filter by team (name, key, or ID)"
+
+# Options for create-issue
+complete -c linear -n "__fish_seen_subcommand_from create-issue" -s t -l title -d "Issue title (required)"
+complete -c linear -n "__fish_seen_subcommand_from create-issue" -l team -d "Team name, key, or ID (required)"
+complete -c linear -n "__fish_seen_subcommand_from create-issue" -s d -l description -d "Issue description (markdown)"
+complete -c linear -n "__fish_seen_subcommand_from create-issue" -s p -l project -d "Project name or ID"
+complete -c linear -n "__fish_seen_subcommand_from create-issue" -l priority -d "Priority" -a "none urgent high normal medium low"
+complete -c linear -n "__fish_seen_subcommand_from create-issue" -s s -l state -d "Initial state/status"
+complete -c linear -n "__fish_seen_subcommand_from create-issue" -s a -l assignee -d "Assignee (name, email, or 'me')"
+complete -c linear -n "__fish_seen_subcommand_from create-issue" -s l -l labels -d "Comma-separated label names"
+complete -c linear -n "__fish_seen_subcommand_from create-issue" -l parent-id -d "Parent issue ID for sub-issues"
+complete -c linear -n "__fish_seen_subcommand_from create-issue" -l output-format -d "Output format" -a "markdown json rich-json"
+
+# Options for update-issue
+complete -c linear -n "__fish_seen_subcommand_from update-issue" -s t -l title -d "New issue title"
+complete -c linear -n "__fish_seen_subcommand_from update-issue" -s d -l description -d "New issue description (markdown)"
+complete -c linear -n "__fish_seen_subcommand_from update-issue" -s p -l project -d "Project name or ID"
+complete -c linear -n "__fish_seen_subcommand_from update-issue" -l priority -d "Priority" -a "none urgent high normal medium low"
+complete -c linear -n "__fish_seen_subcommand_from update-issue" -s s -l state -d "State/status"
+complete -c linear -n "__fish_seen_subcommand_from update-issue" -s a -l assignee -d "Assignee (name, email, 'me', or 'none')"
+complete -c linear -n "__fish_seen_subcommand_from update-issue" -s l -l labels -d "Comma-separated label names"
+complete -c linear -n "__fish_seen_subcommand_from update-issue" -l parent-id -d "Parent issue ID (or 'none')"
+complete -c linear -n "__fish_seen_subcommand_from update-issue" -l output-format -d "Output format" -a "markdown json rich-json"
 
 # Options for completion
 complete -c linear -n "__fish_seen_subcommand_from completion" -l bash -d "Generate Bash completion script"

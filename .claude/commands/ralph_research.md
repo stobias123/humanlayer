@@ -9,11 +9,10 @@ description: Research highest priority Linear ticket needing investigation
 
 ## PART I - IF NO TICKET IS MENTIONED
 
-0.  read .claude/commands/linear.md
+0.  read ~/.claude/commands/linear.md
 0a. fetch the top 10 priority items from linear in status "research needed" using the MCP tools, noting all items in the `links` section
-0b. select the highest priority SMALL or XS issue from the list (if no SMALL or XS issues exist, EXIT IMMEDIATELY and inform the user)
-0c. use `linear` cli to fetch the selected item into thoughts with the ticket number - ./thoughts/shared/tickets/ENG-xxxx.md
-0d. read the ticket and all comments to understand what research is needed and any previous attempts
+0b. use `linear` cli to fetch the selected item into thoughts with the ticket number - ./thoughts/shared/tickets/ENG-xxxx.md
+0c. read the ticket and all comments to understand what research is needed and any previous attempts
 
 ## PART II - NEXT STEPS
 
@@ -26,7 +25,7 @@ think deeply
 think deeply about the research needs
 
 2. conduct the research:
-2a. read .claude/commands/research_codebase.md for guidance on effective codebase research
+2a. read ~/.claude/commands/research_codebase.md for guidance on effective codebase research
 2b. if the linear comments suggest web research is needed, use WebSearch to research external solutions, APIs, or best practices
 2c. search the codebase for relevant implementations and patterns
 2d. examine existing similar features or related code

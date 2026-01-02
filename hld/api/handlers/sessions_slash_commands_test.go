@@ -239,6 +239,16 @@ func (m *MockStore) ArchiveFolderCascade(ctx context.Context, id string) error {
 	return args.Error(0)
 }
 
+func (m *MockStore) GetSubtreeMaxDepth(ctx context.Context, folderID string) (int, error) {
+	args := m.Called(ctx, folderID)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockStore) IsDescendant(ctx context.Context, ancestorID, potentialDescendant string) (bool, error) {
+	args := m.Called(ctx, ancestorID, potentialDescendant)
+	return args.Bool(0), args.Error(1)
+}
+
 func TestGetSlashCommands(t *testing.T) {
 	ctx := context.Background()
 
@@ -404,9 +414,9 @@ func TestGetSlashCommandsWithGlobalCommands(t *testing.T) {
 	tempDir := t.TempDir()
 	localCommandsDir := filepath.Join(tempDir, ".claude", "commands")
 
-	// Create a temp home directory for global commands
+	// Create a temp home directory for global commands (~/.claude/commands)
 	tempHomeDir := t.TempDir()
-	globalCommandsDir := filepath.Join(tempHomeDir, ".config", "claude-code", "commands")
+	globalCommandsDir := filepath.Join(tempHomeDir, ".claude", "commands")
 
 	// Set HOME env var temporarily for this test
 	originalHome := os.Getenv("HOME")
@@ -565,9 +575,9 @@ func TestGetSlashCommandsGlobalOverridesLocal(t *testing.T) {
 	tempDir := t.TempDir()
 	localCommandsDir := filepath.Join(tempDir, ".claude", "commands")
 
-	// Create a temp home directory for global commands
+	// Create a temp home directory for global commands (~/.claude/commands)
 	tempHomeDir := t.TempDir()
-	globalCommandsDir := filepath.Join(tempHomeDir, ".config", "claude-code", "commands")
+	globalCommandsDir := filepath.Join(tempHomeDir, ".claude", "commands")
 
 	// Set HOME env var temporarily for this test
 	originalHome := os.Getenv("HOME")
@@ -777,8 +787,8 @@ func TestGetSlashCommandsFallsBackToDefaultWhenCLAUDE_CONFIG_DIRNotSet(t *testin
 	tempDir := t.TempDir()
 	tempHomeDir := t.TempDir()
 
-	// Set up directory structure in default location (~/.config/claude-code/commands)
-	defaultConfigDir := filepath.Join(tempHomeDir, ".config", "claude-code")
+	// Set up directory structure in default location (~/.claude/commands)
+	defaultConfigDir := filepath.Join(tempHomeDir, ".claude")
 	defaultCommandsDir := filepath.Join(defaultConfigDir, "commands")
 	assert.NoError(t, os.MkdirAll(defaultCommandsDir, 0755))
 

@@ -2,7 +2,7 @@
 FROM golang:1.24-alpine AS builder
 
 # Install build dependencies (CGO needed for SQLite)
-RUN apk add --no-cache gcc musl-dev sqlite-dev
+RUN apk add --no-cache gcc musl-dev sqlite-dev make
 
 WORKDIR /src
 
@@ -27,7 +27,10 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o /hld ./cmd/hld
 FROM alpine:3.19
 
 # Install runtime dependencies including bash, curl, and other tools needed for Claude Code
-RUN apk add --no-cache sqlite-libs ca-certificates bash curl unzip libstdc++ libgcc
+RUN apk add --no-cache sqlite-libs ca-certificates bash curl unzip libstdc++ libgcc git openssh github-cli
+
+# Install Java 21 JDK
+RUN apk add --no-cache openjdk21
 
 # Install Node.js for running hlyr MCP server
 RUN apk add --no-cache nodejs npm
@@ -45,10 +48,31 @@ COPY hlyr/ /opt/hlyr/
 WORKDIR /opt/hlyr
 RUN bun install && bun run build
 
-# Create hlyr wrapper script
+# Create hlyr wrapper script (also available as 'humanlayer')
 RUN echo '#!/bin/sh' > /usr/local/bin/hlyr && \
     echo 'exec node /opt/hlyr/dist/index.js "$@"' >> /usr/local/bin/hlyr && \
-    chmod +x /usr/local/bin/hlyr
+    chmod +x /usr/local/bin/hlyr && \
+    ln -s /usr/local/bin/hlyr /usr/local/bin/humanlayer
+
+# Copy and build linear CLI - install to /opt to avoid /src PVC mount
+COPY hack/linear/ /opt/linear/
+WORKDIR /opt/linear
+RUN npm install && npm run build
+
+# Create linear wrapper script
+RUN echo '#!/bin/sh' > /usr/local/bin/linear && \
+    echo 'exec node /opt/linear/dist/linear-cli.js "$@"' >> /usr/local/bin/linear && \
+    chmod +x /usr/local/bin/linear
+
+# Copy create_worktree script to global path
+COPY hack/create_worktree.sh /usr/local/bin/create_worktree
+RUN chmod +x /usr/local/bin/create_worktree
+
+# Copy Claude Code commands and agents to config directory
+RUN mkdir -p /root/.claude/commands /root/.claude/agents
+COPY .claude/commands/ /root/.claude/commands/
+COPY .claude/agents/ /root/.claude/agents/
+COPY skills /root/.claude/skills
 
 WORKDIR /
 

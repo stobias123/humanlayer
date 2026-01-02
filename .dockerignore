@@ -41,13 +41,11 @@ examples
 humanlayer
 
 # Other directories not needed for hld Docker build
-hack
 apps
 packages
 thoughts
 scripts
 k8s
-.claude
 
 # hld subdirectories not needed for build
 hld/sdk

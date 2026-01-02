@@ -4,7 +4,7 @@ description: Create worktree and launch implementation session for a plan
 ---
 
 2. set up worktree for implementation:
-2a. read `hack/create_worktree.sh` and create a new worktree with the Linear branch name: `./hack/create_worktree.sh ENG-XXXX BRANCH_NAME`
+2a. create a new worktree with the Linear branch name: `/usr/local/bin/create_worktree ENG-XXXX BRANCH_NAME`
 
 3. determine required data:
 
@@ -29,13 +29,13 @@ branch name: BRANCH_NAME
 path to plan file: $FILEPATH
 launch prompt:
 
-    /implement_plan at $FILEPATH and when you are done implementing and all tests pass, read ./claude/commands/commit.md and create a commit, then read ./claude/commands/describe_pr.md and create a PR, then add a comment to the Linear ticket with the PR link
+    /implement_plan at $FILEPATH and when you are done implementing and all tests pass, read ~/.claude/commands/commit.md and create a commit, then read ~/.claude/commands/describe_pr.md and create a PR, then add a comment to the Linear ticket with the PR link
 
 command to run:
 
-    humanlayer launch --model opus -w ~/wt/humanlayer/ENG-XXXX "/implement_plan at $FILEPATH and when you are done implementing and all tests pass, read ./claude/commands/commit.md and create a commit, then read ./claude/commands/describe_pr.md and create a PR, then add a comment to the Linear ticket with the PR link"
+    humanlayer launch --model opus -w ~/wt/humanlayer/ENG-XXXX "/implement_plan at $FILEPATH and when you are done implementing and all tests pass, read ~/.claude/commands/commit.md and create a commit, then read ~/.claude/commands/describe_pr.md and create a PR, then add a comment to the Linear ticket with the PR link"
 ```
 
 incorporate any user feedback then:
 
-4. launch implementation session: `humanlayer launch --model opus -w ~/wt/humanlayer/ENG-XXXX "/implement_plan at $FILEPATH and when you are done implementing and all tests pass, read ./claude/commands/commit.md and create a commit, then read ./claude/commands/describe_pr.md and create a PR, then add a comment to the Linear ticket with the PR link"`
+4. launch implementation session: `humanlayer launch --model opus -w ~/wt/humanlayer/ENG-XXXX "/implement_plan at $FILEPATH and when you are done implementing and all tests pass, read ~/.claude/commands/commit.md and create a commit, then read ~/.claude/commands/describe_pr.md and create a PR, then add a comment to the Linear ticket with the PR link"`

@@ -127,8 +127,8 @@ A local command in a nested directory.`,
 			require.NoError(t, err)
 		}
 
-		// Create global commands in temp home directory
-		globalCommandsDir := filepath.Join(tempHomeDir, ".config", "claude-code", "commands")
+		// Create global commands in temp home directory (~/.claude/commands)
+		globalCommandsDir := filepath.Join(tempHomeDir, ".claude", "commands")
 		err = os.MkdirAll(filepath.Join(globalCommandsDir, "tmp"), 0755)
 		require.NoError(t, err)
 		defer func() {
@@ -464,11 +464,11 @@ func TestSlashCommandsPerformance(t *testing.T) {
 	err = os.MkdirAll(localCommandsDir, 0755)
 	require.NoError(t, err)
 
-	globalCommandsDir := filepath.Join(tempHomeDir, ".config", "claude-code", "commands", "perf")
+	globalCommandsDir := filepath.Join(tempHomeDir, ".claude", "commands", "perf")
 	err = os.MkdirAll(globalCommandsDir, 0755)
 	require.NoError(t, err)
 	defer func() {
-		os.RemoveAll(filepath.Join(tempHomeDir, ".config", "claude-code", "commands", "perf"))
+		os.RemoveAll(filepath.Join(tempHomeDir, ".claude", "commands", "perf"))
 	}()
 
 	// Create 50 local and 50 global commands
