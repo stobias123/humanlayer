@@ -24,7 +24,7 @@ command to run
 ```
 based on the input, I plan to create a worktree with the following details:
 
-worktree path: ~/wt/humanlayer/ENG-XXXX
+worktree path: /src/worktrees/humanlayer/ENG-XXXX
 branch name: BRANCH_NAME
 path to plan file: $FILEPATH
 launch prompt:

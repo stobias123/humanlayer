@@ -31,3 +31,20 @@ spec:
       storage: 5Gi
   # Uncomment and set if you need a specific storage class
   # storageClassName: standard
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hld-config
+  namespace: humanlayer
+  labels:
+    app.kubernetes.io/name: hld
+    app.kubernetes.io/component: daemon
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+  # Uncomment and set if you need a specific storage class
+  # storageClassName: standard

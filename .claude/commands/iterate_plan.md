@@ -78,8 +78,6 @@ If the user's feedback requires understanding new code patterns or validating as
    - **thoughts-analyzer** - To extract insights from documents
 
    **Be EXTREMELY specific about directories**:
-   - If the change involves "WUI", specify `humanlayer-wui/` directory
-   - If it involves "daemon", specify `hld/` directory
    - Include full path context in prompts
 
 3. **Read any new files identified by research**:

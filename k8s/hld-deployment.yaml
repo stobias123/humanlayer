@@ -40,6 +40,8 @@ spec:
               mountPath: /data
             - name: src
               mountPath: /src
+            - name: config
+              mountPath: /root/.config
             - name: ssh-key
               mountPath: /root/.ssh
               readOnly: true
@@ -74,6 +76,9 @@ spec:
         - name: src
           persistentVolumeClaim:
             claimName: hld-src
+        - name: config
+          persistentVolumeClaim:
+            claimName: hld-config
         - name: ssh-key
           secret:
             secretName: hld-ssh-key
