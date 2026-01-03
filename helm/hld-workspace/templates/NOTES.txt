@@ -1,0 +1,21 @@
+Workspace "{{ .Values.workspace.name }}" has been deployed!
+
+Workspace ID: {{ .Values.workspace.id }}
+Namespace: {{ include "hld-workspace.namespace" . }}
+{{- if .Values.ingress.enabled }}
+URL: http://{{ include "hld-workspace.ingressHost" . }}
+{{- else }}
+Service: {{ include "hld-workspace.fullname" . }}.{{ include "hld-workspace.namespace" . }}.svc.cluster.local:{{ .Values.service.port }}
+{{- end }}
+
+To check the status:
+  kubectl get pods -n {{ include "hld-workspace.namespace" . }}
+
+To view logs:
+  kubectl logs -n {{ include "hld-workspace.namespace" . }} -l app.kubernetes.io/instance={{ .Values.workspace.id }}
+
+To stop the workspace (scale to 0):
+  helm upgrade {{ .Release.Name }} . --reuse-values --set state.running=false
+
+To start the workspace (scale to 1):
+  helm upgrade {{ .Release.Name }} . --reuse-values --set state.running=true

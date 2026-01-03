@@ -1,0 +1,28 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "hld-workspace.fullname" . }}
+  namespace: {{ include "hld-workspace.namespace" . }}
+  labels:
+    {{- include "hld-workspace.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+  - host: {{ include "hld-workspace.ingressHost" . }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "hld-workspace.fullname" . }}
+            port:
+              number: {{ .Values.service.port }}
+  tls:
+  - hosts:
+    - {{ include "hld-workspace.ingressHost" . }}
+    secretName: {{ include "hld-workspace.fullname" . }}-tls
+{{- end }}

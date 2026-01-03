@@ -1,0 +1,64 @@
+# Workspace identification
+workspace:
+  id: ""  # Required - UUID or short name
+  name: ""  # Required - Human-readable name
+
+# Image configuration
+image:
+  repository: la-nuc-1:30500/hld
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Resource allocation
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "100m"
+  limits:
+    memory: "1Gi"
+    cpu: "1"
+
+# Storage configuration
+storage:
+  dataSize: 1Gi
+  srcSize: 5Gi
+  storageClassName: ""  # Empty uses cluster default
+
+# Networking
+service:
+  type: ClusterIP
+  port: 7777
+
+ingress:
+  enabled: true
+  className: traefik
+  host: ""  # Auto-generated as workspace-{id}.workspaces.local if empty
+  annotations:
+    cert-manager.io/cluster-issuer: selfsigned
+
+# HumanLayer configuration
+config:
+  apiBaseUrl: "https://api.humanlayer.dev/humanlayer/v1"
+  logLevel: "info"
+  httpHost: "0.0.0.0"  # Bind to all interfaces in K8s
+  httpPort: 7777
+
+# Secrets (all optional)
+secrets:
+  humanlayerApiKey: ""
+  anthropicApiKey: ""
+  openrouterApiKey: ""
+  basetenApiKey: ""
+
+# Git credentials via gh CLI
+git:
+  enabled: false
+  ghToken: ""  # GitHub CLI token (ghp_xxxx or github_pat_xxx)
+  userName: ""
+  userEmail: ""
+
+# Workspace state
+state:
+  # When stopped, deployment replicas set to 0
+  # When running, deployment replicas set to 1
+  running: true
