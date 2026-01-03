@@ -1,0 +1,12 @@
+apiVersion: v2
+name: hld-workspace
+description: HLD daemon workspace instance for Claude Code development
+type: application
+version: 0.1.0
+appVersion: "0.1.12"
+keywords:
+  - humanlayer
+  - claude-code
+  - workspace
+maintainers:
+  - name: HumanLayer Team
