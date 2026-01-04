@@ -1,0 +1,398 @@
+openapi: 3.0.3
+info:
+  title: Workspace Daemon API
+  description: API for managing HLD workspace deployments
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /workspaces:
+    get:
+      summary: List all workspaces
+      operationId: listWorkspaces
+      responses:
+        '200':
+          description: List of workspaces
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceListResponse'
+
+    post:
+      summary: Create a new workspace
+      operationId: createWorkspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkspaceRequest'
+      responses:
+        '201':
+          description: Workspace created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /workspaces/{id}:
+    get:
+      summary: Get workspace details
+      operationId: getWorkspace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workspace details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceResponse'
+        '404':
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete a workspace
+      operationId: deleteWorkspace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workspace deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '404':
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /workspaces/{id}/start:
+    post:
+      summary: Start a workspace
+      operationId: startWorkspace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workspace started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceResponse'
+        '404':
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /workspaces/{id}/stop:
+    post:
+      summary: Stop a workspace
+      operationId: stopWorkspace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workspace stopped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceResponse'
+        '404':
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /workspaces/{id}/events:
+    get:
+      summary: Get workspace events
+      operationId: getWorkspaceEvents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Workspace events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventListResponse'
+        '404':
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - version
+      properties:
+        status:
+          type: string
+          example: ok
+        version:
+          type: string
+          example: 0.1.0
+
+    CreateWorkspaceRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 63
+        docker_image:
+          type: string
+          default: hld
+        docker_image_tag:
+          type: string
+          default: latest
+        cpu_request:
+          type: string
+          example: "100m"
+        memory_request:
+          type: string
+          example: "256Mi"
+        cpu_limit:
+          type: string
+          example: "1000m"
+        memory_limit:
+          type: string
+          example: "1Gi"
+        data_size:
+          type: string
+          example: "10Gi"
+        src_size:
+          type: string
+          example: "10Gi"
+        git_user_name:
+          type: string
+        git_user_email:
+          type: string
+          format: email
+        secrets:
+          type: object
+          additionalProperties:
+            type: string
+          description: Key-value pairs for workspace secrets
+
+    Workspace:
+      type: object
+      required:
+        - id
+        - name
+        - status
+        - docker_image
+        - docker_image_tag
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+            - pending
+            - running
+            - stopped
+            - error
+        docker_image:
+          type: string
+        docker_image_tag:
+          type: string
+        helm_release_name:
+          type: string
+        namespace:
+          type: string
+        ingress_host:
+          type: string
+        cpu_request:
+          type: string
+        memory_request:
+          type: string
+        cpu_limit:
+          type: string
+        memory_limit:
+          type: string
+        data_size:
+          type: string
+        src_size:
+          type: string
+        git_enabled:
+          type: boolean
+        git_user_name:
+          type: string
+        git_user_email:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deployment_status:
+          $ref: '#/components/schemas/DeploymentStatus'
+
+    DeploymentStatus:
+      type: object
+      properties:
+        phase:
+          type: string
+        ready:
+          type: boolean
+        message:
+          type: string
+        pod_ip:
+          type: string
+        node_name:
+          type: string
+        start_time:
+          type: string
+
+    Event:
+      type: object
+      required:
+        - id
+        - workspace_id
+        - event_type
+        - created_at
+      properties:
+        id:
+          type: integer
+          format: int64
+        workspace_id:
+          type: string
+        event_type:
+          type: string
+        message:
+          type: string
+        metadata:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    WorkspaceResponse:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          $ref: '#/components/schemas/Workspace'
+        error:
+          type: string
+          nullable: true
+
+    WorkspaceListResponse:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Workspace'
+        error:
+          type: string
+          nullable: true
+
+    EventListResponse:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        error:
+          type: string
+          nullable: true
+
+    MessageResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+        error:
+          type: string
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        data:
+          nullable: true
+        error:
+          type: string

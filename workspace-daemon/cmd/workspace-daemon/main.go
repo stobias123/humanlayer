@@ -11,8 +11,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/humanlayer/humanlayer/workspace-daemon/internal/api/handlers"
+
+	"github.com/humanlayer/humanlayer/workspace-daemon/internal/api"
 	"github.com/humanlayer/humanlayer/workspace-daemon/internal/config"
+	"github.com/humanlayer/humanlayer/workspace-daemon/internal/orchestrator"
+	"github.com/humanlayer/humanlayer/workspace-daemon/internal/store"
 )
 
 func main() {
@@ -41,15 +44,34 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// Initialize router
-	router := gin.New()
-	router.Use(gin.Recovery())
-
-	// API routes
-	api := router.Group("/api/v1")
-	{
-		api.GET("/health", handlers.Health())
+	// Initialize SQLite store
+	st, err := store.NewSQLiteStore(cfg.DatabasePath)
+	if err != nil {
+		slog.Error("Failed to initialize store", "error", err)
+		os.Exit(1)
 	}
+	defer st.Close()
+	slog.Info("Store initialized", "path", cfg.DatabasePath)
+
+	// Initialize Helm orchestrator
+	var orch orchestrator.Orchestrator
+	if cfg.HelmChartPath != "" {
+		helmOrch, err := orchestrator.NewHelmOrchestrator(cfg.KubeConfig, cfg.HelmChartPath)
+		if err != nil {
+			slog.Warn("Failed to initialize Helm orchestrator - workspace deployment disabled", "error", err)
+		} else {
+			orch = helmOrch
+			slog.Info("Helm orchestrator initialized", "chart", cfg.HelmChartPath)
+		}
+	} else {
+		slog.Warn("Helm chart path not configured - workspace deployment disabled")
+	}
+
+	// Initialize router with all dependencies
+	router := api.NewRouter(api.RouterConfig{
+		Store:        st,
+		Orchestrator: orch,
+	})
 
 	// Create HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.HTTPHost, cfg.HTTPPort)
