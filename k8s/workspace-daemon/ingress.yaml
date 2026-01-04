@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: workspace-daemon
+  namespace: humanlayer
+  labels:
+    app.kubernetes.io/name: workspace-daemon
+    app.kubernetes.io/component: orchestrator
+  annotations:
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.options: default
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: workspace-daemon.la-nuc-1.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: workspace-daemon
+                port:
+                  number: 8888
