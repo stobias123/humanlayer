@@ -241,22 +241,14 @@ export function WorkspaceList({ onCreateClick, onSelectWorkspace }: WorkspaceLis
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Workspaces</h2>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleManualRefresh}
-            disabled={isRefreshing}
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </Button>
-          {onCreateClick && (
-            <Button onClick={onCreateClick}>
-              <Plus className="mr-2 h-4 w-4" />
-              New Workspace
-            </Button>
-          )}
-        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleManualRefresh}
+          disabled={isRefreshing}
+        >
+          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+        </Button>
       </div>
 
       <Card>
