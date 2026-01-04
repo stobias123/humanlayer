@@ -5,6 +5,7 @@ import { SessionDetailPage } from '@/pages/SessionDetailPage'
 import { DraftSessionPage } from '@/pages/DraftSessionPage'
 import { ThoughtsPage } from '@/pages/ThoughtsPage'
 import { ThoughtDetailPage } from '@/pages/ThoughtDetailPage'
+import { WorkspacesPage } from '@/pages/WorkspacesPage'
 import { QuickLauncher } from '@/components/QuickLauncher'
 import StoreDemo from '@/pages/StoreDemo'
 import WuiDemo from '@/pages/WuiDemo'
@@ -36,6 +37,10 @@ export const router = createHashRouter([
       {
         path: 'thoughts/*',
         element: <ThoughtDetailPage />,
+      },
+      {
+        path: 'workspaces',
+        element: <WorkspacesPage />,
       },
     ],
   },
