@@ -2,7 +2,8 @@
  * Workspace list component displaying all workspaces with status and actions
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import { useShallow } from 'zustand/shallow'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -182,19 +183,29 @@ function EmptyState({ onCreateClick }: { onCreateClick?: () => void }) {
 }
 
 export function WorkspaceList({ onCreateClick, onSelectWorkspace }: WorkspaceListProps) {
-  const { workspaces, isLoading, error, fetchWorkspaces } = useWorkspaceStore()
+  const { workspaces, isLoading, error } = useWorkspaceStore(
+    useShallow(state => ({
+      workspaces: state.workspaces,
+      isLoading: state.isLoading,
+      error: state.error,
+    }))
+  )
+  const fetchWorkspaces = useWorkspaceStore(state => state.fetchWorkspaces)
   const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Stable reference to avoid re-creating interval
+  const silentFetch = useCallback(() => {
+    fetchWorkspaces(true)
+  }, [fetchWorkspaces])
 
   // Initial fetch and auto-refresh
   useEffect(() => {
-    fetchWorkspaces()
+    fetchWorkspaces() // Initial fetch with loading state
 
-    const interval = setInterval(() => {
-      fetchWorkspaces()
-    }, 10000) // Refresh every 10 seconds
+    const interval = setInterval(silentFetch, 10000) // Silent refresh every 10 seconds
 
     return () => clearInterval(interval)
-  }, [fetchWorkspaces])
+  }, [fetchWorkspaces, silentFetch])
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true)

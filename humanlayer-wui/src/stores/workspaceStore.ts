@@ -21,7 +21,7 @@ interface WorkspaceStore {
   error: string | null
 
   // Actions
-  fetchWorkspaces: () => Promise<void>
+  fetchWorkspaces: (silent?: boolean) => Promise<void>
   createWorkspace: (request: CreateWorkspaceRequest) => Promise<Workspace>
   startWorkspace: (id: string) => Promise<void>
   stopWorkspace: (id: string) => Promise<void>
@@ -45,18 +45,31 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   error: null,
 
   // Actions
-  fetchWorkspaces: async () => {
-    set({ isLoading: true, error: null })
+  fetchWorkspaces: async (silent = false) => {
+    if (!silent) {
+      set({ isLoading: true, error: null })
+    }
     try {
       const client = getWorkspaceClient()
-      const workspaces = await client.listWorkspaces()
-      set({ workspaces, isLoading: false })
-      logger.info('[WorkspaceStore] Fetched workspaces', { count: workspaces.length })
+      const newWorkspaces = await client.listWorkspaces()
+
+      // Only update if data actually changed (prevents unnecessary re-renders)
+      const { workspaces: current } = get()
+      const hasChanged = JSON.stringify(newWorkspaces) !== JSON.stringify(current)
+
+      if (hasChanged) {
+        set({ workspaces: newWorkspaces, isLoading: false, error: null })
+        logger.info('[WorkspaceStore] Fetched workspaces', { count: newWorkspaces.length })
+      } else if (!silent) {
+        set({ isLoading: false })
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch workspaces'
       logger.error('[WorkspaceStore] Failed to fetch workspaces', { error: message })
-      set({ error: message, isLoading: false })
-      toast.error(message)
+      if (!silent) {
+        set({ error: message, isLoading: false })
+        toast.error(message)
+      }
     }
   },
 

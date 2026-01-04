@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/humanlayer/humanlayer/workspace-daemon/internal/store"
@@ -14,6 +15,7 @@ import (
 	"helm.sh/helm/v3/pkg/cli"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -155,6 +157,15 @@ func (h *HelmOrchestrator) DeployWorkspace(ctx context.Context, ws *store.Worksp
 
 	h.logger.Info("Deploying workspace", "id", ws.ID, "namespace", namespace, "release", releaseName)
 
+	// Check if namespace already exists - fail early with clear error
+	_, err := h.kubeClient.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+	if err == nil {
+		return fmt.Errorf("workspace %s cannot be deployed: namespace %s already exists (delete workspace first or clean up namespace manually)", ws.ID, namespace)
+	}
+	if !k8serrors.IsNotFound(err) {
+		return fmt.Errorf("failed to check namespace existence: %w", err)
+	}
+
 	actionConfig, err := h.getHelmActionConfig(namespace)
 	if err != nil {
 		return err
@@ -179,7 +190,12 @@ func (h *HelmOrchestrator) DeployWorkspace(ctx context.Context, ws *store.Worksp
 
 	_, err = install.RunWithContext(ctx, chart, values)
 	if err != nil {
-		return fmt.Errorf("failed to install helm release: %w", err)
+		errStr := err.Error()
+		// Check for namespace already exists errors (both direct and Helm ownership errors)
+		if strings.Contains(errStr, "already exists") || strings.Contains(errStr, "exists and cannot be imported") {
+			return fmt.Errorf("workspace %s cannot be deployed: namespace %s already exists (delete workspace first or clean up namespace manually): %w", ws.ID, namespace, err)
+		}
+		return fmt.Errorf("failed to install helm release for workspace %s: %w", ws.ID, err)
 	}
 
 	h.logger.Info("Workspace deployed successfully", "id", ws.ID)
@@ -262,15 +278,24 @@ func (h *HelmOrchestrator) DeleteWorkspace(ctx context.Context, ws *store.Worksp
 
 	_, err = uninstall.Run(releaseName)
 	if err != nil {
-		h.logger.Warn("Failed to uninstall helm release", "error", err)
-		// Continue to try deleting namespace
+		// "not found" is expected when release doesn't exist (already deleted or never created)
+		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+			h.logger.Debug("Helm release already deleted or never existed", "release", releaseName)
+		} else {
+			h.logger.Warn("Failed to uninstall helm release", "release", releaseName, "error", err)
+		}
+		// Continue to try deleting namespace either way
 	}
 
 	// Delete namespace (Helm doesn't delete namespaces it creates)
 	err = h.kubeClient.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{})
 	if err != nil {
-		h.logger.Warn("Failed to delete namespace", "namespace", namespace, "error", err)
-		// Don't fail - namespace might already be gone
+		// "not found" is expected when namespace doesn't exist (already deleted or never created)
+		if k8serrors.IsNotFound(err) {
+			h.logger.Debug("Namespace already deleted or never existed", "namespace", namespace)
+		} else {
+			h.logger.Warn("Failed to delete namespace", "namespace", namespace, "error", err)
+		}
 	}
 
 	h.logger.Info("Workspace deleted", "id", ws.ID)

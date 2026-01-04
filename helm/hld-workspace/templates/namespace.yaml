@@ -1,6 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{ include "hld-workspace.namespace" . }}
-  labels:
-    {{- include "hld-workspace.labels" . | nindent 4 }}

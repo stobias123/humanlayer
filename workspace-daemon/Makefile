@@ -1,4 +1,4 @@
-.PHONY: build run test lint clean docker-build docker-push k8s-deploy k8s-destroy k8s-status k8s-logs k8s-logs-f k8s-port-forward
+.PHONY: build run test test-integration lint clean docker-build docker-push k8s-deploy k8s-destroy k8s-status k8s-logs k8s-logs-f k8s-port-forward
 
 # Build the daemon binary
 build:
@@ -11,6 +11,11 @@ run: build
 # Run all tests
 test:
 	go test ./...
+
+# Run integration tests (requires Kubernetes cluster)
+# Uses la-nuc-1-k8s context by default
+test-integration:
+	go test -v -tags=integration ./internal/orchestrator/...
 
 # Run linter
 lint:
