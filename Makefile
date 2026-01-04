@@ -512,3 +512,33 @@ hld-k8s-logs-f: ## Follow hld pod logs
 
 hld-k8s-port-forward: ## Port forward hld service to localhost:7777
 	@$(MAKE) -C hld k8s-port-forward
+
+# =============================================================================
+# Kubernetes Deployment (workspace-daemon)
+# =============================================================================
+
+.PHONY: workspace-daemon-docker-build workspace-daemon-docker-push workspace-daemon-k8s-deploy workspace-daemon-k8s-destroy workspace-daemon-k8s-status workspace-daemon-k8s-logs workspace-daemon-k8s-logs-f workspace-daemon-k8s-port-forward
+
+workspace-daemon-docker-build: ## Build workspace-daemon Docker image
+	@$(MAKE) -C workspace-daemon docker-build
+
+workspace-daemon-docker-push: ## Push workspace-daemon Docker image to registry
+	@$(MAKE) -C workspace-daemon docker-push
+
+workspace-daemon-k8s-deploy: ## Build and deploy workspace-daemon to Kubernetes
+	@$(MAKE) -C workspace-daemon k8s-deploy
+
+workspace-daemon-k8s-destroy: ## Delete workspace-daemon Kubernetes deployment
+	@$(MAKE) -C workspace-daemon k8s-destroy
+
+workspace-daemon-k8s-status: ## Show workspace-daemon Kubernetes deployment status
+	@$(MAKE) -C workspace-daemon k8s-status
+
+workspace-daemon-k8s-logs: ## View workspace-daemon pod logs
+	@$(MAKE) -C workspace-daemon k8s-logs
+
+workspace-daemon-k8s-logs-f: ## Follow workspace-daemon pod logs
+	@$(MAKE) -C workspace-daemon k8s-logs-f
+
+workspace-daemon-k8s-port-forward: ## Port forward workspace-daemon service to localhost:8888
+	@$(MAKE) -C workspace-daemon k8s-port-forward

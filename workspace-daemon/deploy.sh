@@ -158,6 +158,7 @@ deploy() {
     kubectl apply -f "${K8S_DIR}/pvc.yaml" -n "${NAMESPACE}"
     kubectl apply -f "$temp_deployment" -n "${NAMESPACE}"
     kubectl apply -f "${K8S_DIR}/service.yaml" -n "${NAMESPACE}"
+    kubectl apply -f "${K8S_DIR}/ingress.yaml" -n "${NAMESPACE}"
 
     rm -f "$temp_deployment"
 
@@ -180,6 +181,7 @@ destroy() {
         exit 0
     fi
 
+    kubectl delete -f "${K8S_DIR}/ingress.yaml" -n "${NAMESPACE}" --ignore-not-found || true
     kubectl delete -f "${K8S_DIR}/deployment.yaml" -n "${NAMESPACE}" --ignore-not-found || true
     kubectl delete -f "${K8S_DIR}/service.yaml" -n "${NAMESPACE}" --ignore-not-found || true
     kubectl delete -f "${K8S_DIR}/configmap.yaml" -n "${NAMESPACE}" --ignore-not-found || true
@@ -205,6 +207,10 @@ status() {
     echo ""
     echo "=== Deployments ==="
     kubectl get deployments -n "${NAMESPACE}" -l app.kubernetes.io/name=workspace-daemon 2>/dev/null || echo "No deployments found"
+
+    echo ""
+    echo "=== Ingress ==="
+    kubectl get ingress -n "${NAMESPACE}" -l app.kubernetes.io/name=workspace-daemon 2>/dev/null || echo "No ingress found"
 }
 
 # View logs

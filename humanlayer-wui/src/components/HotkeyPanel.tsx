@@ -27,6 +27,7 @@ const hotkeyData = [
   { category: 'Global', key: 'C', description: 'Create new session' },
   { category: 'Global', key: 'G,S', description: 'Go to sessions' },
   { category: 'Global', key: 'G,E', description: 'Go to archived sessions' },
+  { category: 'Global', key: 'G,W', description: 'Go to workspaces' },
   { category: 'Global', key: '⌘+T', description: 'Toggle theme selector' },
   { category: 'Global', key: '⌘+Enter', description: 'Submit text input' },
   { category: 'Global', key: '⌘+⇧+J', description: 'Jump to most recent approval' },

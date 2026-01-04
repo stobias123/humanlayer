@@ -787,6 +787,20 @@ export function Layout() {
     },
   )
 
+  // G+W - Go to workspaces
+  useHotkeys(
+    'g>w',
+    e => {
+      e.stopPropagation()
+      navigate('/workspaces')
+    },
+    {
+      scopes: [HOTKEY_SCOPES.ROOT],
+      preventDefault: true,
+      enableOnFormTags: false,
+    },
+  )
+
   // Global hotkey for feedback
   // Don't specify scopes to make it work globally (defaults to wildcard '*')
   useHotkeys(

@@ -2,6 +2,7 @@ import { RefObject } from 'react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useSessionLauncher, isViewingSessionDetail } from '@/hooks/useSessionLauncher'
+import { useNavigate } from 'react-router-dom'
 import { useStore } from '@/AppStore'
 import { KeyboardShortcut } from './HotkeyPanel'
 import { HOTKEY_SCOPES } from '@/hooks/hotkeys/scopes'
@@ -32,6 +33,7 @@ interface MenuOption {
 export default function CommandPaletteMenu({ ref }: { ref: RefObject<HTMLDivElement> }) {
   const { createNewSession, close } = useSessionLauncher()
   const { trackEvent } = usePostHogTracking()
+  const navigate = useNavigate()
 
   const [internalSearchValue, setInternalSearchValue] = useState('')
   const [selectedValue, setSelectedValue] = useState<string>('')
@@ -128,6 +130,16 @@ export default function CommandPaletteMenu({ ref }: { ref: RefObject<HTMLDivElem
         close()
       },
       hotkey: '\\',
+    },
+    {
+      id: 'go-to-workspaces',
+      label: 'Workspaces',
+      description: 'View and manage workspaces',
+      action: () => {
+        navigate('/workspaces')
+        close()
+      },
+      hotkey: 'G,W',
     },
     ...(isSessionDetail && internalSearchValue.toLowerCase().includes('brain')
       ? [

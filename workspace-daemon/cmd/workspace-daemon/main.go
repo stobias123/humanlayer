@@ -10,9 +10,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/humanlayer/humanlayer/workspace-daemon/internal/api/handlers"
 	"github.com/humanlayer/humanlayer/workspace-daemon/internal/config"
+	"github.com/humanlayer/humanlayer/workspace-daemon/internal/orchestrator"
+	"github.com/humanlayer/humanlayer/workspace-daemon/internal/store"
 )
 
 func main() {
@@ -36,6 +39,26 @@ func main() {
 		"port", cfg.HTTPPort,
 		"host", cfg.HTTPHost)
 
+	// Initialize store
+	dbStore, err := store.NewSQLiteStore(cfg.DatabasePath)
+	if err != nil {
+		slog.Error("Failed to initialize store", "error", err)
+		os.Exit(1)
+	}
+	defer dbStore.Close()
+	slog.Info("Database initialized", "path", cfg.DatabasePath)
+
+	// Initialize orchestrator
+	orch, err := orchestrator.NewHelmOrchestrator(cfg.HelmChartPath, logger)
+	if err != nil {
+		slog.Error("Failed to initialize orchestrator", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("Orchestrator initialized", "chart_path", cfg.HelmChartPath)
+
+	// Create workspace handlers
+	wsHandlers := handlers.NewWorkspaceHandlers(dbStore, orch, logger)
+
 	// Set Gin mode based on log level
 	if cfg.LogLevel != "debug" {
 		gin.SetMode(gin.ReleaseMode)
@@ -45,10 +68,30 @@ func main() {
 	router := gin.New()
 	router.Use(gin.Recovery())
 
+	// Configure CORS
+	corsConfig := cors.Config{
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: false,
+		MaxAge:           12 * time.Hour,
+	}
+	router.Use(cors.New(corsConfig))
+
 	// API routes
 	api := router.Group("/api/v1")
 	{
 		api.GET("/health", handlers.Health())
+
+		// Workspace routes
+		api.GET("/workspaces", wsHandlers.ListWorkspaces())
+		api.POST("/workspaces", wsHandlers.CreateWorkspace())
+		api.GET("/workspaces/:id", wsHandlers.GetWorkspace())
+		api.DELETE("/workspaces/:id", wsHandlers.DeleteWorkspace())
+		api.POST("/workspaces/:id/start", wsHandlers.StartWorkspace())
+		api.POST("/workspaces/:id/stop", wsHandlers.StopWorkspace())
+		api.GET("/workspaces/:id/events", wsHandlers.GetEvents())
 	}
 
 	// Create HTTP server

@@ -6,9 +6,6 @@ metadata:
   labels:
     app.kubernetes.io/name: workspace-daemon
     app.kubernetes.io/component: orchestrator
-  annotations:
-    traefik.ingress.kubernetes.io/router.tls: "true"
-    traefik.ingress.kubernetes.io/router.tls.options: default
 spec:
   ingressClassName: traefik
   rules:

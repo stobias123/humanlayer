@@ -15,6 +15,9 @@ interface WorkspaceStore {
   selectedWorkspaceEvents: WorkspaceEvent[]
   isLoading: boolean
   isCreating: boolean
+  isStarting: boolean
+  isStopping: boolean
+  isDeleting: boolean
   error: string | null
 
   // Actions
@@ -36,6 +39,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   selectedWorkspaceEvents: [],
   isLoading: false,
   isCreating: false,
+  isStarting: false,
+  isStopping: false,
+  isDeleting: false,
   error: null,
 
   // Actions
@@ -87,6 +93,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       return
     }
 
+    set({ isStarting: true })
+
     // Optimistic update
     set(state => ({
       workspaces: state.workspaces.map(w =>
@@ -104,6 +112,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
           w.id === id ? updated : w
         ),
         selectedWorkspace: state.selectedWorkspace?.id === id ? updated : state.selectedWorkspace,
+        isStarting: false,
       }))
 
       logger.info('[WorkspaceStore] Started workspace', { id })
@@ -114,6 +123,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         workspaces: state.workspaces.map(w =>
           w.id === id ? workspace : w
         ),
+        isStarting: false,
       }))
 
       const message = error instanceof Error ? error.message : 'Failed to start workspace'
@@ -129,6 +139,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       toast.error('Workspace not found')
       return
     }
+
+    set({ isStopping: true })
 
     // Optimistic update
     set(state => ({
@@ -147,6 +159,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
           w.id === id ? updated : w
         ),
         selectedWorkspace: state.selectedWorkspace?.id === id ? updated : state.selectedWorkspace,
+        isStopping: false,
       }))
 
       logger.info('[WorkspaceStore] Stopped workspace', { id })
@@ -157,6 +170,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         workspaces: state.workspaces.map(w =>
           w.id === id ? workspace : w
         ),
+        isStopping: false,
       }))
 
       const message = error instanceof Error ? error.message : 'Failed to stop workspace'
@@ -173,6 +187,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       return
     }
 
+    set({ isDeleting: true })
+
     // Optimistic removal
     set(state => ({
       workspaces: state.workspaces.filter(w => w.id !== id),
@@ -183,12 +199,14 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       const client = getWorkspaceClient()
       await client.deleteWorkspace(id)
 
+      set({ isDeleting: false })
       logger.info('[WorkspaceStore] Deleted workspace', { id })
       toast.success(`Workspace "${workspace.name}" deleted`)
     } catch (error) {
       // Revert optimistic removal
       set(state => ({
         workspaces: [...state.workspaces, workspace],
+        isDeleting: false,
       }))
 
       const message = error instanceof Error ? error.message : 'Failed to delete workspace'

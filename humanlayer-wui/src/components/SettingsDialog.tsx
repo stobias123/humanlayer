@@ -18,6 +18,7 @@ import { appLogDir } from '@tauri-apps/api/path'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { copyToClipboard } from '@/utils/clipboard'
 import { DaemonConnectionPanel } from './DaemonConnectionPanel'
+import { WorkspaceDaemonPanel } from './WorkspaceDaemonPanel'
 
 interface SettingsDialogProps {
   open: boolean
@@ -443,6 +444,12 @@ export function SettingsDialog({ open, onOpenChange, onConfigUpdate }: SettingsD
             <div className="space-y-2">
               <Label className="text-sm font-medium">Daemon Connection</Label>
               <DaemonConnectionPanel variant="inline" />
+            </div>
+
+            {/* Workspace Daemon Section */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Workspace Daemon</Label>
+              <WorkspaceDaemonPanel />
             </div>
 
             {/* Logs Section */}

@@ -24,8 +24,7 @@ export function WorkspacesPage() {
   }
 
   const handleSelectWorkspace = (workspace: Workspace) => {
-    // For now, just log - could navigate to workspace detail view
-    console.log('Selected workspace:', workspace.id)
+    navigate(`/workspaces/${workspace.id}`)
   }
 
   const handleDeleteConfirm = async () => {

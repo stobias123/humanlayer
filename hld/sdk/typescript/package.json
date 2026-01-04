@@ -1,9 +1,17 @@
 {
-  "name": "@humanlayer/hld-sdk",
+  "name": "@stobias123/hld-sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for HumanLayer Daemon REST API",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stobias123/humanlayer.git",
+    "directory": "hld/sdk/typescript"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "scripts": {
     "build": "bun run tsc",
     "generate": "./scripts/generate.sh",

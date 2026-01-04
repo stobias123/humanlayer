@@ -31,6 +31,22 @@ export const logger = {
     }
   },
 
+  info: (message: string, ...args: any[]) => {
+    const fullMessage = [message, ...args]
+      .map(arg => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg)))
+      .join(' ')
+
+    if (isBrowser) {
+      console.info(message, ...args)
+      return
+    }
+
+    getTauriLog().then(log => log?.info?.(`[Console] ${fullMessage}`))
+    if (import.meta.env.DEV) {
+      console.info(message, ...args)
+    }
+  },
+
   error: (message: string, ...args: any[]) => {
     const fullMessage = [message, ...args]
       .map(arg => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg)))
@@ -100,6 +116,7 @@ export const logger = {
 // Export original console methods for migration
 export const browserConsole = {
   log: console.log.bind(console),
+  info: console.info.bind(console),
   error: console.error.bind(console),
   warn: console.warn.bind(console),
   debug: console.debug.bind(console),

@@ -159,6 +159,11 @@ export function getWorkspaceClient(): HTTPWorkspaceClient {
   return clientInstance
 }
 
+// Reset the singleton instance (used when URL changes)
+export function resetWorkspaceClient(): void {
+  clientInstance = null
+}
+
 // Export for testing or custom configuration
 export function createWorkspaceClient(baseUrl?: string): HTTPWorkspaceClient {
   return new HTTPWorkspaceClient(baseUrl)
