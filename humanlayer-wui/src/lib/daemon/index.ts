@@ -9,3 +9,6 @@ export * from './types'
 
 // Export error types
 export * from './errors'
+
+// Export deduped fetcher utilities
+export { DedupedFetcher, conversationFetcher } from './deduped-fetcher'

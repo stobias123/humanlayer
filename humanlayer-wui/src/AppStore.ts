@@ -38,6 +38,10 @@ interface StoreState {
     error: string | null
   } | null
 
+  /* Connection */
+  connectionLatency: number | null
+  setConnectionLatency: (latency: number | null) => void
+
   initSessions: (sessions: Session[]) => void
   updateSession: (sessionId: string, updates: Partial<Session>) => void
   updateSessionOptimistic: (sessionId: string, updates: Partial<Session>) => Promise<void>
@@ -203,6 +207,8 @@ export const useStore = create<StoreState>((set, get) => {
     claudeConfig: null,
     responseEditor: null,
     isResponseEditorEmpty: true,
+    connectionLatency: null,
+    setConnectionLatency: (latency) => set({ connectionLatency: latency }),
 
     // Folder state
     folders: [],

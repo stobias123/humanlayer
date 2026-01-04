@@ -61,10 +61,34 @@ export function Layout() {
   const isSettingsDialogOpen = useStore(state => state.isSettingsDialogOpen)
   const setSettingsDialogOpen = useStore(state => state.setSettingsDialogOpen)
   const clearActiveSessionDetail = useStore(state => state.clearActiveSessionDetail)
+  const activeSessionDetail = useStore(state => state.activeSessionDetail)
   const [showTelemetryModal, setShowTelemetryModal] = useState(false)
 
+  // Clear stale session data when on list view (optional - keeps memory clean)
+  useEffect(() => {
+    // If we're on the root route (session list) and have old cached data
+    if (location.pathname === '/' && activeSessionDetail) {
+      // Clear after a delay to allow back-navigation to still be fast
+      const timeout = setTimeout(() => {
+        // Only clear if we're still on the list view
+        if (window.location.hash === '#/' || window.location.hash === '') {
+          clearActiveSessionDetail()
+        }
+      }, 30000) // 30 second cache TTL
+
+      return () => clearTimeout(timeout)
+    }
+  }, [location.pathname, activeSessionDetail, clearActiveSessionDetail])
+
   // Use the daemon connection hook for all connection management
-  const { connected, connecting, version, healthStatus, connect, checkHealth } = useDaemonConnection()
+  const { connected, connecting, version, healthStatus, latency, connect, checkHealth } =
+    useDaemonConnection()
+  const setConnectionLatency = useStore(state => state.setConnectionLatency)
+
+  // Sync latency to store when it changes
+  useEffect(() => {
+    setConnectionLatency(latency)
+  }, [latency, setConnectionLatency])
 
   // Hotkey panel state from store
   const { isHotkeyPanelOpen, setHotkeyPanelOpen, sidebarCollapsed, toggleSidebar } = useStore()

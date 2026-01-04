@@ -16,6 +16,17 @@ import {
 import { getDaemonUrl, getDefaultHeaders } from './http-config'
 import { logger } from '@/lib/logging'
 import { captureException } from '@/lib/telemetry/sentry'
+
+/**
+ * Check if an error is an AbortError (intentional request cancellation)
+ */
+function isAbortError(error: Error): boolean {
+  return (
+    error.name === 'AbortError' ||
+    (error instanceof DOMException && error.name === 'AbortError') ||
+    error.message.toLowerCase().includes('abort')
+  )
+}
 import type {
   DaemonClient as IDaemonClient,
   LaunchSessionParams,
@@ -81,6 +92,11 @@ export class HTTPDaemonClient implements IDaemonClient {
       headers: getDefaultHeaders(),
       // Add Sentry error handler
       onFetchError: (error, context) => {
+        // Skip logging and Sentry for AbortErrors - they're expected during polling
+        if (isAbortError(error)) {
+          return
+        }
+
         logger.error('[HTTPDaemonClient] SDK fetch error:', {
           url: context.url,
           method: context.method,

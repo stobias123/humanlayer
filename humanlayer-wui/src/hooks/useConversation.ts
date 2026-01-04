@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { daemonClient, ConversationEvent } from '@/lib/daemon'
 import { formatError } from '@/utils/errors'
 import { useStore } from '@/AppStore'
+import { conversationFetcher } from '@/lib/daemon/deduped-fetcher'
 
 interface UseConversationReturn {
   events: ConversationEvent[]
@@ -14,18 +15,36 @@ interface UseConversationReturn {
 export function useConversation(
   sessionId?: string,
   claudeSessionId?: string,
-  pollInterval: number = 1000,
+  basePollInterval: number = 1000,
 ): UseConversationReturn {
   const activeSessionDetail = useStore(state => state.activeSessionDetail)
   const updateActiveSessionConversation = useStore(state => state.updateActiveSessionConversation)
+  const connectionLatency = useStore(state => state.connectionLatency)
   const sessionStatus = activeSessionDetail?.session.status
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [errorCount, setErrorCount] = useState(0)
   const [isInitialLoad, setIsInitialLoad] = useState(true)
 
-  // Add abort controller for request cancellation
-  const abortControllerRef = useRef<AbortController | null>(null)
+  // Calculate adaptive poll interval based on latency
+  // Formula: max(latency * 3, basePollInterval, 2000ms minimum for remote)
+  const pollInterval = useMemo(() => {
+    if (!connectionLatency) {
+      return basePollInterval // No latency data, use default
+    }
+
+    // If latency > 50ms, treat as remote and use minimum 2000ms
+    const isRemote = connectionLatency > 50
+    const minInterval = isRemote ? 2000 : basePollInterval
+
+    // Poll at 3x latency to avoid overlapping requests
+    const latencyBasedInterval = connectionLatency * 3
+
+    return Math.max(latencyBasedInterval, minInterval)
+  }, [connectionLatency, basePollInterval])
+
+  // Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true)
 
   // Get events from store if this is the active session
   const events = (
@@ -43,31 +62,19 @@ export function useConversation(
       return
     }
 
-    // Cancel any in-flight request
-    if (abortControllerRef.current) {
-      try {
-        abortControllerRef.current.abort()
-      } catch (err) {
-        console.log('[useConversation] Error aborting request:', err)
-      }
-    }
-
-    // Create new abort controller for this request
-    abortControllerRef.current = new AbortController()
+    // Use deduplication - if request is in flight, this will return existing promise
+    const dedupKey = `conversation:${sessionId || claudeSessionId}`
 
     try {
-      if (abortControllerRef.current.signal.aborted) {
-        console.log('[useConversation] Ignoring abort error')
-        return
-      }
-
       setLoading(true)
       setError(null)
 
-      const response = await daemonClient.getConversation(
-        { session_id: sessionId, claude_session_id: claudeSessionId },
-        { signal: abortControllerRef.current.signal },
+      const response = await conversationFetcher.fetch(dedupKey, () =>
+        daemonClient.getConversation({ session_id: sessionId, claude_session_id: claudeSessionId }),
       )
+
+      // Only update state if still mounted
+      if (!isMountedRef.current) return
 
       // Update the store if this is the active session
       if (activeSessionDetail?.session.id === sessionId) {
@@ -77,10 +84,8 @@ export function useConversation(
       setErrorCount(0)
       setIsInitialLoad(false)
     } catch (err: any) {
-      if (abortControllerRef.current?.signal.aborted || err?.cause?.name === 'AbortError') {
-        console.log('[useConversation] Ignoring abort error')
-        return
-      }
+      // Only update state if still mounted
+      if (!isMountedRef.current) return
 
       console.log(
         '[useConversation] Error fetching conversation:',
@@ -92,7 +97,9 @@ export function useConversation(
       setError(await formatError(err))
       setErrorCount(prev => prev + 1)
     } finally {
-      setLoading(false)
+      if (isMountedRef.current) {
+        setLoading(false)
+      }
     }
   }, [sessionId, claudeSessionId, errorCount, activeSessionDetail, updateActiveSessionConversation])
 
@@ -101,6 +108,8 @@ export function useConversation(
   fetchConversationRef.current = fetchConversation
 
   useEffect(() => {
+    isMountedRef.current = true
+
     // Don't poll if sessionId is undefined (e.g., for draft sessions)
     if (!sessionId) {
       return
@@ -119,11 +128,8 @@ export function useConversation(
     }, pollInterval)
 
     return () => {
+      isMountedRef.current = false
       clearInterval(interval)
-      // Cancel any pending request on unmount
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
     }
   }, [sessionId, activeSessionDetail?.session.id, pollInterval])
 

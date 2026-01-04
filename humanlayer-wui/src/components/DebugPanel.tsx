@@ -16,6 +16,7 @@ import type { DebugInfo } from '@/lib/daemon/types'
 import { logger } from '@/lib/logging'
 import { type DaemonInfo, daemonService } from '@/services/daemon-service'
 import { useDebugStore } from '@/stores/useDebugStore'
+import { useStore } from '@/AppStore'
 import { Copy, Database, Loader2, RefreshCw, Server } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
@@ -28,6 +29,7 @@ interface DebugPanelProps {
 
 export function DebugPanel({ open, onOpenChange }: DebugPanelProps) {
   const { connected, reconnect } = useDaemonConnection()
+  const connectionLatency = useStore(state => state.connectionLatency)
   const [isRestarting, setIsRestarting] = useState(false)
   const [restartError, setRestartError] = useState<string | null>(null)
   const [daemonType, setDaemonType] = useState<'managed' | 'external'>('managed')
@@ -35,6 +37,11 @@ export function DebugPanel({ open, onOpenChange }: DebugPanelProps) {
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null)
   const [actualDaemonUrl, setActualDaemonUrl] = useState<string | null>(null)
   const { showDevUrl, setShowDevUrl, showHotkeyDebugger, setShowHotkeyDebugger } = useDebugStore()
+
+  // Calculate adaptive poll interval for display
+  const adaptivePollInterval = connectionLatency
+    ? Math.max(connectionLatency * 3, connectionLatency > 50 ? 2000 : 1000)
+    : 1000
 
   // Helper to format bytes to human-readable size
   function formatBytes(bytes: number): string {
@@ -177,6 +184,25 @@ export function DebugPanel({ open, onOpenChange }: DebugPanelProps) {
                   {actualDaemonUrl || (connected ? 'Loading...' : 'Not connected')}
                 </span>
               </div>
+
+              {/* Display latency and adaptive poll interval */}
+              {connected && connectionLatency !== null && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Latency</span>
+                    <span
+                      className={`text-sm font-mono ${connectionLatency > 50 ? 'text-amber-500' : 'text-[var(--terminal-success)]'}`}
+                    >
+                      {connectionLatency}ms
+                      {connectionLatency > 50 && ' (remote)'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Adaptive Poll Interval</span>
+                    <span className="text-sm font-mono">{adaptivePollInterval}ms</span>
+                  </div>
+                </>
+              )}
 
               {daemonType === 'managed' && (
                 <Button
