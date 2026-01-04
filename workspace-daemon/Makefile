@@ -1,4 +1,4 @@
-.PHONY: build run test lint clean
+.PHONY: build run test lint clean docker-build docker-push k8s-deploy k8s-destroy k8s-status k8s-logs k8s-logs-f k8s-port-forward
 
 # Build the daemon binary
 build:
@@ -20,3 +20,28 @@ lint:
 # Clean build artifacts
 clean:
 	rm -f workspace-daemon
+
+# Docker/Kubernetes deployment targets
+docker-build:
+	./deploy.sh build
+
+docker-push:
+	./deploy.sh push
+
+k8s-deploy:
+	./deploy.sh deploy
+
+k8s-destroy:
+	./deploy.sh destroy
+
+k8s-status:
+	./deploy.sh status
+
+k8s-logs:
+	./deploy.sh logs
+
+k8s-logs-f:
+	./deploy.sh logs -f
+
+k8s-port-forward:
+	./deploy.sh port-forward 8888

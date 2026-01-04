@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace-daemon
+  namespace: humanlayer
+  labels:
+    app.kubernetes.io/name: workspace-daemon
+    app.kubernetes.io/component: orchestrator
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Required for RWO PVC
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: workspace-daemon
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: workspace-daemon
+        app.kubernetes.io/component: orchestrator
+    spec:
+      serviceAccountName: workspace-daemon
+      containers:
+        - name: workspace-daemon
+          image: la-nuc-1:30500/workspace-daemon:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8888
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: workspace-daemon-config
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: workspace-daemon-data
