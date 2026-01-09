@@ -131,6 +131,14 @@ interface StoreState {
   autoScrollEnabled: boolean
   setAutoScrollEnabled: (enabled: boolean) => void
 
+  /* New Approval Auto-scroll */
+  pendingNewApproval: {
+    approvalId: string
+    sessionId: string
+  } | null
+  setPendingNewApproval: (approvalId: string, sessionId: string) => void
+  clearPendingNewApproval: () => void
+
   /* User Settings */
   userSettings: {
     advancedProviders: boolean
@@ -1203,6 +1211,12 @@ export const useStore = create<StoreState>((set, get) => {
     // Auto-scroll state
     autoScrollEnabled: true, // Default to enabled
     setAutoScrollEnabled: (enabled: boolean) => set({ autoScrollEnabled: enabled }),
+
+    // New approval auto-scroll
+    pendingNewApproval: null,
+    setPendingNewApproval: (approvalId: string, sessionId: string) =>
+      set({ pendingNewApproval: { approvalId, sessionId } }),
+    clearPendingNewApproval: () => set({ pendingNewApproval: null }),
 
     // User Settings
     userSettings: null,

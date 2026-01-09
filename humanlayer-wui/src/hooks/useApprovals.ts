@@ -3,6 +3,7 @@ import { daemonClient } from '@/lib/daemon'
 import { Approval } from '@/lib/daemon/types'
 import { formatError } from '@/utils/errors'
 import { logger } from '@/lib/logging'
+import { useStore } from '@/AppStore'
 
 interface UseApprovalsReturn {
   approvals: Approval[]
@@ -82,6 +83,7 @@ export function useApprovals(sessionId?: string): UseApprovalsReturn {
 // Hook for real-time updates
 export function useApprovalsWithSubscription(sessionId?: string): UseApprovalsReturn {
   const base = useApprovals(sessionId)
+  const setPendingNewApproval = useStore(state => state.setPendingNewApproval)
 
   useEffect(() => {
     let unsubscribe: (() => void) | null = null
@@ -108,6 +110,13 @@ export function useApprovalsWithSubscription(sessionId?: string): UseApprovalsRe
             // Handle different event types
             switch (event.type) {
               case 'new_approval':
+                // Refresh approvals when relevant events occur
+                base.refresh()
+                // Track the new approval for auto-scroll
+                if (event.data?.approval_id && event.data?.session_id) {
+                  setPendingNewApproval(event.data.approval_id, event.data.session_id)
+                }
+                break
               case 'approval_resolved':
                 // Refresh approvals when relevant events occur
                 base.refresh()
@@ -138,7 +147,7 @@ export function useApprovalsWithSubscription(sessionId?: string): UseApprovalsRe
       isSubscribed = false
       unsubscribe?.()
     }
-  }, [sessionId, base.refresh])
+  }, [sessionId, base.refresh, setPendingNewApproval])
 
   return base
 }

@@ -196,6 +196,51 @@ export function ActiveSession({ session, onClose }: ActiveSessionProps) {
     }
   }, [targetApprovalId, events?.length > 0, approvals.focusApprovalById])
 
+  // Auto-scroll to new approvals when they arrive
+  const pendingNewApproval = useStore(state => state.pendingNewApproval)
+  const clearPendingNewApproval = useStore(state => state.clearPendingNewApproval)
+  const autoScrollEnabled = useStore(state => state.autoScrollEnabled)
+  const processedNewApprovalRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    // Only process if there's a pending approval for this session
+    if (!pendingNewApproval || pendingNewApproval.sessionId !== session.id) {
+      return
+    }
+
+    // Don't re-process the same approval
+    if (processedNewApprovalRef.current === pendingNewApproval.approvalId) {
+      return
+    }
+
+    // Check if the approval exists in the current events
+    const approvalEvent = events.find(e => e.approvalId === pendingNewApproval.approvalId)
+    if (!approvalEvent) {
+      // Approval not yet in events, will retry when events update
+      return
+    }
+
+    // Only auto-scroll if auto-scroll is enabled (user is at bottom)
+    if (autoScrollEnabled && approvals.focusApprovalById) {
+      processedNewApprovalRef.current = pendingNewApproval.approvalId
+      // Small delay to ensure DOM has updated
+      setTimeout(() => {
+        approvals.focusApprovalById(pendingNewApproval.approvalId)
+        clearPendingNewApproval()
+      }, 100)
+    } else {
+      // Clear the pending approval even if we don't scroll (user scrolled up)
+      clearPendingNewApproval()
+    }
+  }, [
+    pendingNewApproval,
+    session.id,
+    events,
+    autoScrollEnabled,
+    approvals.focusApprovalById,
+    clearPendingNewApproval,
+  ])
+
   // Add fork commit handler
   const handleForkCommit = useCallback(() => {
     setForkPreviewData(null)
